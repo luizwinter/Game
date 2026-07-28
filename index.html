@@ -1,0 +1,2727 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POKEGAME - Protótipo</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0f1e2e;
+    --panel:#e8d9b5;
+    --panel-dark:#c9b57e;
+    --ink:#1c1408;
+    --accent-gold:#e8b93a;
+    --accent-green:#3a9d5d;
+    --accent-red:#c0392b;
+    --accent-blue:#2f6690;
+    --border:#1c1408;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--bg-deep);
+    background-image:
+      repeating-linear-gradient(rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 2px, transparent 3px),
+      radial-gradient(circle at 20% 15%, #1e3350 0%, transparent 45%),
+      radial-gradient(circle at 85% 75%, #24314f 0%, transparent 45%),
+      linear-gradient(180deg, #0f1e2e 0%, #0a1622 100%);
+    font-family:'VT323', monospace; color:var(--ink); font-size:20px;
+    display:flex; justify-content:center; padding:16px;
+  }
+  #app{width:100%; max-width:1100px; display:flex; flex-direction:column; gap:14px;}
+  .game-grid{display:grid; grid-template-areas:"left" "center" "right"; grid-template-columns:1fr; gap:14px;}
+  .col-left{grid-area:left;} .col-center{grid-area:center;} .col-right{grid-area:right;}
+  @media (min-width:1000px){
+    .game-grid{grid-template-areas:"left center right"; grid-template-columns:200px minmax(340px,1fr) 300px; align-items:start;}
+  }
+  .quick-team-card{border:2px solid var(--border); border-radius:3px; padding:6px; background:#fffdf3; margin-bottom:6px; font-size:14px;}
+  .quick-team-card .hp-bar-outer{height:8px;}
+  .box{
+    background:var(--panel); border:4px solid var(--border); border-radius:4px;
+    box-shadow:
+      0 0 0 2px #7a6a3e inset,
+      -2px -2px 0 1px rgba(255,255,255,0.35) inset,
+      2px 2px 0 1px rgba(0,0,0,0.3) inset,
+      6px 6px 0 rgba(0,0,0,0.4);
+    padding:16px;
+  }
+  h1,h2,h3{margin:0 0 10px 0;}
+  h1{font-size:16px; color:var(--accent-gold); text-shadow:2px 2px 0 #000; text-align:center;}
+  h2{font-size:13px; color:var(--accent-blue);}
+  h3{font-size:12px; color:var(--accent-red);}
+  button{
+    font-family:'VT323', monospace; font-size:18px; cursor:pointer;
+    background:var(--accent-blue); color:#fff; border:3px solid var(--border);
+    border-radius:3px; padding:7px 12px;
+    box-shadow:3px 3px 0 rgba(0,0,0,0.4), -1px -1px 0 rgba(255,255,255,0.25) inset, 1px 1px 0 rgba(0,0,0,0.25) inset;
+    transition:transform .05s; text-shadow:1px 1px 0 rgba(0,0,0,0.35);
+  }
+  button:hover{filter:brightness(1.15);}
+  button:active{transform:translate(2px,2px); box-shadow:1px 1px 0 rgba(0,0,0,.4);}
+  button.gold{background:var(--accent-gold); color:#1c1408;}
+  button.green{background:var(--accent-green);}
+  button.red{background:var(--accent-red);}
+  button.dir{font-size:20px; padding:8px 12px;}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  input, select{
+    font-family:'VT323',monospace; font-size:20px; padding:6px;
+    border:3px solid var(--border); border-radius:3px; background:#fffdf3;
+  }
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .center{display:flex; align-items:center; justify-content:center;}
+
+  .board-wrap{display:flex; justify-content:center; margin:10px 0;}
+  .grid16{display:grid; grid-template-columns:repeat(6, 1fr); gap:clamp(2px,0.6vw,4px); width:min(360px, 92vw);}
+  .tile{
+    position:relative; border:1.5px solid var(--border); aspect-ratio:1; width:100%;
+    border-radius:2px; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; cursor:default;
+  }
+  .tile.current-zone{ outline:2px solid var(--accent-gold); outline-offset:-2px; }
+  .tile.center-zone{ background:#c0392b !important; }
+  .tile.shop-zone{ background:#c9a227 !important; }
+  .tile.tunnel-zone{ outline:2px dashed #8fe3ff; outline-offset:-2px; }
+  .tunnel-flag{position:absolute; top:0; right:1px; font-size:9px;}
+  .tile .tokens{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:1px; flex-wrap:wrap;}
+  .tile .zlabel{position:absolute; top:0; left:1px; font-size:clamp(6px,1.6vw,8px); color:rgba(255,255,255,.65); line-height:1;}
+  .token-sprite{transition:transform .15s; position:relative;}
+  .turn-arrow{position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); font-size:9px; color:var(--accent-gold); animation:bounceArrow .6s infinite alternate;}
+  @keyframes bounceArrow{from{transform:translateX(-50%) translateY(0);} to{transform:translateX(-50%) translateY(-2px);}}
+  @media (min-width:700px){ .grid16{ width:420px; } }
+  @media (min-width:1100px){ .grid16{ width:480px; } }
+  .event-flag{position:absolute; bottom:0; right:1px; font-size:8px;}
+
+  .terra-1{background:linear-gradient(160deg,#7a52b0 0%,#4a2d6e 100%);}
+  .terra-2{background:linear-gradient(160deg,#3f8bb0 0%,#1f4d66 100%);}
+  .terra-3{background:linear-gradient(160deg,#2ca0d6 0%,#155a78 100%);}
+  .terra-4{background:linear-gradient(160deg,#4a9758 0%,#234f2b 100%);}
+  .terra-5{background:linear-gradient(160deg,#54a066 0%,#295c34 100%);}
+  .terra-6{background:linear-gradient(160deg,#4fb0ac 0%,#256662 100%);}
+  .terra-7{background:linear-gradient(160deg,#7d9142 0%,#454f1f 100%);}
+  .terra-8{background:linear-gradient(160deg,#a37943 0%,#5c3f1e 100%);}
+
+  .dpad{display:grid; grid-template-columns:repeat(3,46px); grid-template-rows:repeat(3,46px); gap:3px; margin:8px auto;}
+  .dpad .empty{visibility:hidden;}
+
+  .log{max-height:180px; overflow-y:auto; background:#fffdf3; border:2px solid var(--border); padding:8px; font-size:16px;}
+  .log div{border-bottom:1px dashed #ccc; padding:3px 0;}
+  .dicelog{max-height:130px; overflow-y:auto; background:#111a24; color:#8fe3a3; border:2px solid var(--border); padding:8px; font-size:15px; font-family:'VT323',monospace;}
+  .dicelog div{border-bottom:1px dashed #2a3a2a; padding:2px 0;}
+
+  .player-card{border:2px solid var(--border); border-radius:3px; padding:8px; background:#fffdf3; font-size:16px; position:relative;}
+  .slot-badge{position:absolute; top:6px; right:6px; font-size:12px; padding:2px 6px; border-radius:3px; border:2px solid var(--border);}
+  .slot-badge.ativo{background:var(--accent-green); color:#fff;}
+  .slot-badge.mochila{background:#999; color:#fff;}
+  .fainted{opacity:.5;}
+  .hp-bar-outer{background:#333; border:2px solid #000; border-radius:3px; height:14px; width:100%;}
+  .hp-bar-inner{background:var(--accent-green); height:100%; border-radius:1px; transition:width .3s;}
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:70; padding:16px;}
+  .modal{max-width:540px; width:100%; max-height:90vh; overflow-y:auto;}
+  .tabs{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;}
+  .tabs button{font-size:14px; padding:5px 10px;}
+  .hidden{display:none !important;}
+  .small{font-size:14px; color:#444;}
+  textarea{width:100%; font-family:'VT323',monospace; font-size:16px; padding:6px; border:2px solid var(--border);}
+  .shop-item{display:flex; justify-content:space-between; align-items:center; border:2px solid var(--border); border-radius:3px; padding:6px 10px; background:#fffdf3; margin-bottom:6px;}
+
+  #toastLayer{position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:100; display:flex; flex-direction:column; gap:6px; align-items:center;}
+  .dice-toast{
+    background:#111a24; color:#ffe08a; border:3px solid var(--accent-gold); border-radius:4px;
+    padding:8px 14px; font-family:'VT323',monospace; font-size:19px; opacity:0; transform:translateY(-14px) scale(.9);
+    transition:opacity .25s, transform .25s; box-shadow:3px 3px 0 rgba(0,0,0,.5); white-space:nowrap;
+  }
+  .dice-toast.show{opacity:1; transform:translateY(0) scale(1);}
+
+  #bigToastLayer{position:fixed; top:36%; left:50%; transform:translate(-50%,-50%); z-index:110; display:flex; flex-direction:column; gap:8px; align-items:center;}
+  .big-toast{
+    border:4px solid; border-radius:6px; padding:14px 26px; font-family:'VT323',monospace;
+    font-size:26px; text-align:center; opacity:0; transform:scale(.8); transition:opacity .3s, transform .3s;
+    box-shadow:5px 5px 0 rgba(0,0,0,.4);
+  }
+  .big-toast.show{opacity:1; transform:scale(1);}
+  .big-toast.good{background:#1c3a24; color:#8fe3a3; border-color:var(--accent-green);}
+  .big-toast.bad{background:#3a1c1c; color:#ffb3b3; border-color:var(--accent-red);}
+
+  #floatingPanel{
+    position:fixed; z-index:40; width:240px;
+    background:var(--panel); border:3px solid var(--border); border-radius:4px;
+    box-shadow:5px 5px 0 rgba(0,0,0,.4);
+  }
+  .float-handle{
+    background:var(--accent-blue); color:#fff; padding:6px 8px; font-size:14px;
+    cursor:move; border-bottom:2px solid var(--border); user-select:none;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .float-buttons{padding:8px; display:flex; flex-direction:column; gap:6px;}
+  .float-buttons button{width:100%; font-size:15px; text-align:left;}
+
+  @keyframes hop{0%{transform:translateY(0);} 40%{transform:translateY(-6px);} 100%{transform:translateY(0);}}
+  .anim-hop{animation:hop .25s ease-in-out;}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
+  .anim-shake{animation:shake .35s;}
+  @keyframes spinIcon{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+  .anim-spin{display:inline-block; animation:spinIcon .5s linear;}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';"></script>
+</head>
+<body>
+<div id="toastLayer"></div>
+<div id="bigToastLayer"></div>
+<div id="app">
+  <div class="box"><h1>⚔️ POKEGAME ⚔️</h1><p class="small" style="text-align:center;margin:0;">protótipo — modo local hotseat</p></div>
+  <div id="screen-setup" class="box"></div>
+  <div id="screen-game" class="hidden"></div>
+</div>
+
+<script>
+/* =========================================================
+   DADOS DO JOGO
+   ========================================================= */
+const TERRAIN_THEMES = [
+  {id:1, name:"Pântano Sombrio", css:"terra-1", types:["Venenoso","Voador"]},
+  {id:2, name:"Brejo Costeiro", css:"terra-2", types:["Água","Terra"]},
+  {id:3, name:"Praia das Tempestades", css:"terra-3", types:["Água","Elétrico"]},
+  {id:4, name:"Mata Fechada", css:"terra-4", types:["Venenoso","Grama"]},
+  {id:5, name:"Vale Selvagem", css:"terra-5", types:["Água","Lutador"]},
+  {id:6, name:"Riacho Comum", css:"terra-6", types:["Água","Venenoso"]},
+  {id:7, name:"Charco Nebuloso", css:"terra-7", types:["Venenoso","Voador"]},
+  {id:8, name:"Terras Rochosas", css:"terra-8", types:["Água","Terra"]},
+];
+function themeOfZone(z){ return TERRAIN_THEMES[(z-1)%8]; }
+
+const MAP_SIZES = { pequeno:4, medio:6, grande:8 };
+let GRID_SIZE = 6;
+let TOTAL_ZONES = GRID_SIZE*GRID_SIZE;
+let CENTER_ZONE = 16; // Centro Pokémon
+let SHOP_ZONE = 21; // Loja
+let TUNNEL_ZONES = new Set();
+function zoneToRC(z){ const i=z-1; return {r:Math.floor(i/GRID_SIZE), c:i%GRID_SIZE}; }
+function rcToZone(r,c){ const rr=((r%GRID_SIZE)+GRID_SIZE)%GRID_SIZE, cc=((c%GRID_SIZE)+GRID_SIZE)%GRID_SIZE; return rr*GRID_SIZE+cc+1; }
+/** Só quem está numa zona-túnel pode atravessar a borda do mapa (mapa NÃO é infinito em toda parte). */
+function neighborZone(z, dir){
+  const {r,c} = zoneToRC(z);
+  let nr=r, nc=c;
+  if(dir==='up') nr=r-1;
+  if(dir==='down') nr=r+1;
+  if(dir==='left') nc=c-1;
+  if(dir==='right') nc=c+1;
+  const crossesBorder = nr<0 || nr>=GRID_SIZE || nc<0 || nc>=GRID_SIZE;
+  if(crossesBorder && !TUNNEL_ZONES.has(z)) return null;
+  return rcToZone(nr,nc);
+}
+function computeTunnels(){
+  TUNNEL_ZONES = new Set();
+  const g = GRID_SIZE;
+  const offs = Array.from(new Set([Math.floor(g/4), Math.floor(3*g/4)])).filter(o=>o>=0 && o<g);
+  offs.forEach(o=>{
+    TUNNEL_ZONES.add(rcToZone(0,o));
+    TUNNEL_ZONES.add(rcToZone(g-1,o));
+    TUNNEL_ZONES.add(rcToZone(o,0));
+    TUNNEL_ZONES.add(rcToZone(o,g-1));
+  });
+}
+function computeStartZones(numPlayers){
+  const g = GRID_SIZE;
+  const mid = Math.floor(g/2);
+  const pts = [
+    rcToZone(0,0), rcToZone(0,g-1), rcToZone(g-1,0), rcToZone(g-1,g-1),
+    rcToZone(0,mid), rcToZone(g-1,mid), rcToZone(mid,0), rcToZone(mid,g-1)
+  ];
+  return pts.slice(0, numPlayers);
+}
+function setupMap(sizeKey){
+  GRID_SIZE = MAP_SIZES[sizeKey] || 6;
+  TOTAL_ZONES = GRID_SIZE*GRID_SIZE;
+  const mid = Math.floor(GRID_SIZE/2);
+  CENTER_ZONE = rcToZone(mid, mid);
+  SHOP_ZONE = rcToZone(mid, Math.max(0,mid-1));
+  computeTunnels();
+}
+
+const RARITY_ORDER = ["Muito comum","Comum","Incomum","Raro","Muito raro","Épico","Lendário"];
+const RARITY_INFO = {
+  "Muito comum": {stats:{atk:1,def:1,vel:1,pv:25}, evoLevel:5, xpPVE:100},
+  "Comum": {stats:{atk:2,def:2,vel:2,pv:30}, evoLevel:10, xpPVE:150},
+  "Incomum": {stats:{atk:3,def:3,vel:3,pv:35}, evoLevel:15, xpPVE:175},
+  "Raro": {stats:{atk:5,def:5,vel:5,pv:40}, evoLevel:20, xpPVE:200},
+  "Muito raro": {stats:{atk:7,def:7,vel:7,pv:45}, evoLevel:25, xpPVE:225},
+  "Épico": {stats:{atk:9,def:9,vel:9,pv:50}, evoLevel:null, xpPVE:250},
+  "Lendário": {stats:{atk:10,def:10,vel:10,pv:60}, evoLevel:null, xpPVE:300},
+};
+function typeCategory(t){
+  if(!t) return "Normal";
+  const map = {
+    "Fogo":"Fogo","Água":"Água","Gelo":"Água","Grama":"Grama",
+    "Elétrico":"Elétrico","Aço":"Elétrico","Terrestre":"Terra","Pedra":"Terra",
+    "Voador":"Voador","Venenoso":"Venenoso","Inseto":"Venenoso",
+    "Psíquico":"Psiquico","Fantasma":"Psiquico","Fada":"Psiquico","Luta":"Lutador",
+    "Dragão":"Dragão","Normal":"Normal"
+  };
+  return map[t] || "Normal";
+}
+const ADVANTAGE = {
+  "Fogo":["Grama"], "Grama":["Água","Terra"], "Água":["Fogo","Terra"],
+  "Elétrico":["Água","Voador"], "Terra":["Elétrico","Fogo"],
+  "Voador":["Grama","Lutador"], "Venenoso":["Grama","Psiquico"],
+  "Lutador":["Terra","Venenoso"], "Psiquico":["Lutador","Venenoso"]
+};
+
+/* POKÉDEX COMPLETO (151 espécies) */
+const POKEDEX = [
+  {name:"Bellsprout", rarity:"Muito comum", types:["Grama", "Venenoso"], terrains:[2, 5, 8]},
+  {name:"Caterpie", rarity:"Muito comum", types:["Inseto"], terrains:[1, 3, 6]},
+  {name:"Eevee", rarity:"Muito comum", types:["Normal"], terrains:[3, 6]},
+  {name:"Ekans", rarity:"Muito comum", types:["Venenoso"], terrains:[1, 4, 7]},
+  {name:"Gastly", rarity:"Muito comum", types:["Fantasma", "Venenoso"], terrains:[3, 6, 8]},
+  {name:"Geodude", rarity:"Muito comum", types:["Pedra", "Terrestre"], terrains:[2, 5, 8]},
+  {name:"Goldeen", rarity:"Muito comum", types:["Água"], terrains:[3, 6]},
+  {name:"Krabby", rarity:"Muito comum", types:["Água"], terrains:[3, 6, 8]},
+  {name:"Machop", rarity:"Muito comum", types:["Luta"], terrains:[2, 5, 8]},
+  {name:"Magnemite", rarity:"Muito comum", types:["Elétrico", "Aço"], terrains:[3, 5, 8]},
+  {name:"Mankey", rarity:"Muito comum", types:["Luta"], terrains:[2, 5, 8]},
+  {name:"Meowth", rarity:"Muito comum", types:["Normal"], terrains:[2, 5, 7]},
+  {name:"Nidoran♀", rarity:"Muito comum", types:["Venenoso"], terrains:[1, 4, 7]},
+  {name:"Nidorina", rarity:"Muito comum", types:["Venenoso"], terrains:[1, 4, 7]},
+  {name:"Oddish", rarity:"Muito comum", types:["Grama", "Venenoso"], terrains:[2, 4, 7]},
+  {name:"Paras", rarity:"Muito comum", types:["Inseto", "Grama"], terrains:[2, 4, 7]},
+  {name:"Pidgey", rarity:"Muito comum", types:["Normal", "Voador"], terrains:[1, 4, 6]},
+  {name:"Poliwag", rarity:"Muito comum", types:["Água"], terrains:[2, 5, 8]},
+  {name:"Rattata", rarity:"Muito comum", types:["Normal"], terrains:[1, 4, 6]},
+  {name:"Sandshrew", rarity:"Muito comum", types:["Terrestre"], terrains:[1, 4, 7]},
+  {name:"Slowpoke", rarity:"Muito comum", types:["Água", "Psíquico"], terrains:[3, 5, 8]},
+  {name:"Venonat", rarity:"Muito comum", types:["Inseto", "Venenoso"], terrains:[2, 5, 7]},
+  {name:"Voltorb", rarity:"Muito comum", types:["Elétrico"], terrains:[3, 6]},
+  {name:"Weedle", rarity:"Muito comum", types:["Inseto", "Venenoso"], terrains:[1, 4, 6, 7]},
+  {name:"Zubat", rarity:"Muito comum", types:["Venenoso", "Voador"], terrains:[1, 4, 7]},
+  {name:"Abra", rarity:"Comum", types:["Psíquico"], terrains:[3]},
+  {name:"Arbok", rarity:"Comum", types:["Venenoso"], terrains:[1, 7]},
+  {name:"Bulbasaur", rarity:"Comum", types:["Grama", "Venenoso"], terrains:[4, 6]},
+  {name:"Charmander", rarity:"Comum", types:["Fogo"], terrains:[5, 6, 7]},
+  {name:"Clefairy", rarity:"Comum", types:["Fada"], terrains:[7]},
+  {name:"Digglet", rarity:"Comum", types:["Terrestre"], terrains:[8]},
+  {name:"Doduo", rarity:"Comum", types:["Normal", "Voador"], terrains:[3]},
+  {name:"Golbat", rarity:"Comum", types:["Venenoso", "Voador"], terrains:[1, 7]},
+  {name:"Grimer", rarity:"Comum", types:["Venenoso"], terrains:[4, 6]},
+  {name:"Growlithe", rarity:"Comum", types:["Fogo"], terrains:[3, 8]},
+  {name:"Haunter", rarity:"Comum", types:["Fantasma", "Venenoso"], terrains:[4]},
+  {name:"Hitmonchan", rarity:"Comum", types:["Luta"], terrains:[1, 4]},
+  {name:"Hitmonlee", rarity:"Comum", types:["Luta"], terrains:[1, 4]},
+  {name:"Horsea", rarity:"Comum", types:["Água"], terrains:[5]},
+  {name:"Jigglypuff", rarity:"Comum", types:["Normal", "Fada"], terrains:[2, 7]},
+  {name:"Jynx", rarity:"Comum", types:["Gelo", "Psíquico"], terrains:[5]},
+  {name:"Kakuna", rarity:"Comum", types:["Inseto", "Venenoso"], terrains:[6]},
+  {name:"Machoke", rarity:"Comum", types:["Luta"], terrains:[3, 8]},
+  {name:"Magikarp", rarity:"Comum", types:["Água"], terrains:[5, 6]},
+  {name:"Magneton", rarity:"Comum", types:["Elétrico", "Aço"], terrains:[3]},
+  {name:"Persian", rarity:"Comum", types:["Normal"], terrains:[8]},
+  {name:"Pidgeotto", rarity:"Comum", types:["Normal", "Voador"], terrains:[1, 6]},
+  {name:"Pikachu", rarity:"Comum", types:["Elétrico"], terrains:[2, 7]},
+  {name:"Ponyta", rarity:"Comum", types:["Fogo"], terrains:[2]},
+  {name:"Psyduck", rarity:"Comum", types:["Água"], terrains:[2, 8]},
+  {name:"Raticate", rarity:"Comum", types:["Normal"], terrains:[1, 6, 7]},
+  {name:"Rhyhorn", rarity:"Comum", types:["Terrestre", "Pedra"], terrains:[5]},
+  {name:"Sandslash", rarity:"Comum", types:["Terrestre"], terrains:[2]},
+  {name:"Shellder", rarity:"Comum", types:["Água"], terrains:[4]},
+  {name:"Spearow", rarity:"Comum", types:["Normal", "Voador"], terrains:[1, 6, 7]},
+  {name:"Squirtle", rarity:"Comum", types:["Água"], terrains:[1, 6]},
+  {name:"Staryu", rarity:"Comum", types:["Água"], terrains:[5]},
+  {name:"Tentacool", rarity:"Comum", types:["Água", "Venenoso"], terrains:[4, 8]},
+  {name:"Vulpix", rarity:"Comum", types:["Fogo"], terrains:[2]},
+  {name:"Cubone", rarity:"Comum", types:["Terrestre"], terrains:[4]},
+  {name:"Drowzee", rarity:"Comum", types:["Psíquico"], terrains:[4]},
+  {name:"Electrode", rarity:"Comum", types:["Elétrico"], terrains:[4]},
+  {name:"Exeggcute", rarity:"Comum", types:["Grama", "Psíquico"], terrains:[4]},
+  {name:"Graveler", rarity:"Comum", types:["Pedra", "Terrestre"], terrains:[1, 3]},
+  {name:"Koffing", rarity:"Comum", types:["Venenoso"], terrains:[5]},
+  {name:"Metapod", rarity:"Comum", types:["Inseto"], terrains:[1, 6]},
+  {name:"Seel", rarity:"Comum", types:["Água"], terrains:[3, 5]},
+  {name:"Butterfree", rarity:"Incomum", types:["Inseto", "Voador"], terrains:[1, 4, 7]},
+  {name:"Chansey", rarity:"Incomum", types:["Normal"], terrains:[3, 6]},
+  {name:"Cloyster", rarity:"Incomum", types:["Água", "Gelo"], terrains:[3, 6]},
+  {name:"Dodrio", rarity:"Incomum", types:["Normal", "Voador"], terrains:[2, 5]},
+  {name:"Dratini", rarity:"Incomum", types:["Dragão"], terrains:[4]},
+  {name:"Dugtrio", rarity:"Incomum", types:["Terrestre"], terrains:[2, 8]},
+  {name:"Fearow", rarity:"Incomum", types:["Normal", "Voador"], terrains:[1, 4, 7]},
+  {name:"Gloom", rarity:"Incomum", types:["Grama", "Venenoso"], terrains:[4, 7]},
+  {name:"Golduck", rarity:"Incomum", types:["Água"], terrains:[2, 8]},
+  {name:"Golem", rarity:"Incomum", types:["Pedra", "Terrestre"], terrains:[2, 8]},
+  {name:"Hypno", rarity:"Incomum", types:["Psíquico"], terrains:[3]},
+  {name:"Kabuto", rarity:"Incomum", types:["Pedra", "Água"], terrains:[4, 7, 8]},
+  {name:"Kadabra", rarity:"Incomum", types:["Psíquico"], terrains:[2, 6]},
+  {name:"Machamp", rarity:"Incomum", types:["Luta"], terrains:[2, 6]},
+  {name:"Nidoran♂", rarity:"Incomum", types:["Venenoso"], terrains:[2, 4, 7]},
+  {name:"Nidorino", rarity:"Incomum", types:["Venenoso"], terrains:[2, 4, 7]},
+  {name:"Parasect", rarity:"Incomum", types:["Inseto", "Grama"], terrains:[4, 7]},
+  {name:"Poliwhirl", rarity:"Incomum", types:["Água"], terrains:[5, 8]},
+  {name:"Primeape", rarity:"Incomum", types:["Luta"], terrains:[2, 5]},
+  {name:"Scyther", rarity:"Incomum", types:["Inseto", "Voador"], terrains:[4, 7]},
+  {name:"Seadra", rarity:"Incomum", types:["Água"], terrains:[3, 6, 7]},
+  {name:"Seaking", rarity:"Incomum", types:["Água"], terrains:[3, 6, 7]},
+  {name:"Starmie", rarity:"Incomum", types:["Água", "Psíquico"], terrains:[3, 6, 7]},
+  {name:"Tentacruel", rarity:"Incomum", types:["Água", "Venenoso"], terrains:[4, 8]},
+  {name:"Weezing", rarity:"Incomum", types:["Venenoso"], terrains:[3, 6]},
+  {name:"Wigglytuff", rarity:"Incomum", types:["Normal", "Fada"], terrains:[7]},
+  {name:"Arcanine", rarity:"Raro", types:["Fogo"], terrains:[2, 7]},
+  {name:"Beedrill", rarity:"Raro", types:["Inseto", "Venenoso"], terrains:[5]},
+  {name:"Exeggutor", rarity:"Raro", types:["Grama", "Psíquico"], terrains:[3]},
+  {name:"Farfetch'd", rarity:"Raro", types:["Normal", "Voador"], terrains:[2, 7]},
+  {name:"Kingler", rarity:"Raro", types:["Água"], terrains:[3]},
+  {name:"Mr. Mime", rarity:"Raro", types:["Psíquico", "Fada"], terrains:[4]},
+  {name:"Muk", rarity:"Raro", types:["Venenoso"], terrains:[2, 7]},
+  {name:"Onix", rarity:"Raro", types:["Pedra", "Terrestre"], terrains:[3]},
+  {name:"Pidgeot", rarity:"Raro", types:["Normal", "Voador"], terrains:[2, 6]},
+  {name:"Pinsir", rarity:"Raro", types:["Inseto"], terrains:[4]},
+  {name:"Rapidash", rarity:"Raro", types:["Fogo"], terrains:[2, 7]},
+  {name:"Rhydon", rarity:"Raro", types:["Terrestre", "Pedra"], terrains:[3]},
+  {name:"Slowbro", rarity:"Raro", types:["Água", "Psíquico"], terrains:[2, 6]},
+  {name:"Tangela", rarity:"Raro", types:["Grama"], terrains:[4]},
+  {name:"Weepinbell", rarity:"Raro", types:["Grama", "Venenoso"], terrains:[2, 6]},
+  {name:"Flareon", rarity:"Raro", types:["Fogo"], terrains:[5]},
+  {name:"Jolteon", rarity:"Raro", types:["Elétrico"], terrains:[5]},
+  {name:"Magmar", rarity:"Raro", types:["Fogo"], terrains:[4]},
+  {name:"Snorlax", rarity:"Raro", types:["Normal"], terrains:[5]},
+  {name:"Alakazam", rarity:"Muito raro", types:["Psíquico"], terrains:[]},
+  {name:"Charmeleon", rarity:"Muito raro", types:["Fogo"], terrains:[]},
+  {name:"Dewgong", rarity:"Muito raro", types:["Água", "Gelo"], terrains:[]},
+  {name:"Dragonair", rarity:"Muito raro", types:["Dragão"], terrains:[]},
+  {name:"Electabuzz", rarity:"Muito raro", types:["Elétrico"], terrains:[]},
+  {name:"Gengar", rarity:"Muito raro", types:["Fantasma", "Venenoso"], terrains:[]},
+  {name:"Gyarados", rarity:"Muito raro", types:["Água", "Voador"], terrains:[]},
+  {name:"Ivysaur", rarity:"Muito raro", types:["Grama", "Venenoso"], terrains:[]},
+  {name:"Kabutops", rarity:"Muito raro", types:["Pedra", "Água"], terrains:[]},
+  {name:"Kangaskhan", rarity:"Muito raro", types:["Normal"], terrains:[]},
+  {name:"Lapras", rarity:"Muito raro", types:["Água", "Gelo"], terrains:[]},
+  {name:"Lickitung", rarity:"Muito raro", types:["Normal"], terrains:[]},
+  {name:"Marowak", rarity:"Muito raro", types:["Terrestre"], terrains:[]},
+  {name:"Nidoking", rarity:"Muito raro", types:["Venenoso", "Terrestre"], terrains:[]},
+  {name:"Nidoqueen", rarity:"Muito raro", types:["Venenoso", "Terrestre"], terrains:[]},
+  {name:"Omanyte", rarity:"Muito raro", types:["Pedra", "Água"], terrains:[]},
+  {name:"Poliwrath", rarity:"Muito raro", types:["Água", "Luta"], terrains:[]},
+  {name:"Porygon", rarity:"Muito raro", types:["Normal"], terrains:[]},
+  {name:"Raichu", rarity:"Muito raro", types:["Elétrico"], terrains:[]},
+  {name:"Vaporeon", rarity:"Muito raro", types:["Água"], terrains:[]},
+  {name:"Venomoth", rarity:"Muito raro", types:["Inseto", "Venenoso"], terrains:[]},
+  {name:"Victreebel", rarity:"Muito raro", types:["Grama", "Venenoso"], terrains:[]},
+  {name:"Vileplume", rarity:"Muito raro", types:["Grama", "Venenoso"], terrains:[]},
+  {name:"Wartortle", rarity:"Muito raro", types:["Água"], terrains:[]},
+  {name:"Aerodactyl", rarity:"Épico", types:["Pedra", "Voador"], terrains:[]},
+  {name:"Blastoise", rarity:"Épico", types:["Água"], terrains:[]},
+  {name:"Charizard", rarity:"Épico", types:["Fogo", "Voador"], terrains:[]},
+  {name:"Clefable", rarity:"Épico", types:["Fada"], terrains:[]},
+  {name:"Dragonite", rarity:"Épico", types:["Dragão", "Voador"], terrains:[]},
+  {name:"Ninetales", rarity:"Épico", types:["Fogo"], terrains:[]},
+  {name:"Omastar", rarity:"Épico", types:["Pedra", "Água"], terrains:[]},
+  {name:"Tauros", rarity:"Épico", types:["Normal"], terrains:[]},
+  {name:"Venusaur", rarity:"Épico", types:["Grama", "Venenoso"], terrains:[]},
+  {name:"Articuno", rarity:"Lendário", types:["Gelo", "Voador"], terrains:[], eventType:"Água"},
+  {name:"Ditto", rarity:"Lendário", types:["Normal"], terrains:[], eventType:"Terra"},
+  {name:"Mew", rarity:"Lendário", types:["Psíquico"], terrains:[], eventType:"Voador"},
+  {name:"Mewtwo", rarity:"Lendário", types:["Psíquico"], terrains:[], eventType:"Psiquico"},
+  {name:"Moltres", rarity:"Lendário", types:["Fogo", "Voador"], terrains:[], eventType:"Fogo"},
+  {name:"Zapdos", rarity:"Lendário", types:["Elétrico", "Voador"], terrains:[], eventType:"Elétrico"},
+];
+const LEGENDARY_NAMES = POKEDEX.filter(p=>p.rarity==="Lendário").map(p=>p.name);
+const EVENT_CATEGORIES = ["Fogo","Água","Grama","Elétrico","Terra","Voador","Venenoso","Psiquico","Lutador"];
+const EVENT_DURATION = 3; // dura 3 rodadas
+const EVENT_INTERVAL = 8; // acontece a cada 8 rodadas (contando do início de um evento até o início do próximo)
+const MAX_ACTIVE = 3;
+const ALL_RAW_TYPES = ["Fogo","Água","Grama","Elétrico","Terrestre","Pedra","Voador","Venenoso","Inseto","Psíquico","Fantasma","Fada","Luta","Gelo","Dragão","Aço","Normal"];
+/** Quanto mais raro/específico o alvo de uma missão de captura, maior o bônus de recompensa. */
+function typeSpecificityBonus(type){
+  const count = POKEDEX.filter(d=>d.types.includes(type)).length;
+  return Math.max(0, Math.round(500/Math.max(count,1)) - 15);
+}
+const MISSION_TEMPLATES = {
+  facil: [
+    ()=>({type:'capture_any', target:3, desc:'Capturar 3 pokémons selvagens', rewardGold:40, rewardXp:30}),
+    ()=>({type:'visit_zones', target:15, desc:'Visitar 15 zonas diferentes', rewardGold:30, rewardXp:20}),
+    ()=>({type:'pve_win', target:2, desc:'Vencer 2 batalhas contra pokémons selvagens', rewardGold:40, rewardXp:30}),
+  ],
+  media: [
+    ()=>({type:'pvp_win', target:1, desc:'Vencer 1 batalha PVP', rewardGold:100, rewardXp:70}),
+    ()=>{ const t=pick(ALL_RAW_TYPES); const bonus=typeSpecificityBonus(t); return {type:'capture_type', target:1, targetType:t, desc:`Capturar um pokémon do tipo ${t}`, rewardGold:80+bonus, rewardXp:55+Math.round(bonus*0.6)}; },
+    ()=>({type:'event_participate', target:2, desc:'Participar de 2 eventos especiais', rewardGold:90, rewardXp:60}),
+  ],
+  dificil: [
+    ()=>({type:'evolve', target:1, desc:'Evoluir um pokémon', rewardGold:220, rewardXp:150}),
+    ()=>{ const opts=['Incomum','Raro','Muito raro']; const r=pick(opts); const idx=RARITY_ORDER.indexOf(r); return {type:'capture_rarity', target:1, targetRarity:r, desc:`Capturar um pokémon de raridade ${r}`, rewardGold:160+idx*45, rewardXp:110+idx*30}; },
+    ()=>({type:'pvp_win', target:2, desc:'Vencer 2 batalhas PVP', rewardGold:260, rewardXp:170}),
+  ]
+};
+function generateMission(tier, p){
+  const tpl = pick(MISSION_TEMPLATES[tier])();
+  tpl.tier = tier;
+  tpl.id = Math.random().toString(36).slice(2,9);
+  tpl.progress = 0;
+  tpl.done = false;
+  if(tpl.type==='visit_zones'){ tpl.baselineZones = p ? p.zonesVisited.size : 0; }
+  return tpl;
+}
+function completeMission(p, ms){
+  ms.done = true;
+  p.gold += ms.rewardGold;
+  if(p.team[0]) gainXP(p.team[0], ms.rewardXp, p);
+  logEvent(`${p.name} completou a missão "${ms.desc}" e recebeu 💰${ms.rewardGold} + ${ms.rewardXp} XP!`);
+  showBigMessage(`✅ Missão concluída: ${ms.desc}!`, 'good');
+  const idx = p.missions.indexOf(ms);
+  p.missions[idx] = generateMission(ms.tier, p);
+}
+/** Avança o progresso de todas as missões ativas do jogador que casam com o evento ocorrido. */
+function processMissionEvent(p, eventType, payload){
+  p.missions.forEach(ms=>{
+    if(ms.done) return;
+    let increment = false;
+    if(eventType==='capture'){
+      if(ms.type==='capture_any') increment=true;
+      else if(ms.type==='capture_type' && payload.types.includes(ms.targetType)) increment=true;
+      else if(ms.type==='capture_rarity' && payload.rarity===ms.targetRarity) increment=true;
+    } else if(ms.type===eventType){
+      increment=true;
+    }
+    if(increment){
+      ms.progress++;
+      if(ms.progress>=ms.target) completeMission(p, ms);
+    }
+  });
+}
+function checkVisitMissions(p){
+  p.missions.forEach(ms=>{
+    if(ms.done || ms.type!=='visit_zones') return;
+    ms.progress = p.zonesVisited.size - ms.baselineZones;
+    if(ms.progress>=ms.target) completeMission(p, ms);
+  });
+}
+const ITEMS = {
+  "Poção": {desc:"Cura 25% da vida máxima", type:"cura", pct:0.25, price:15},
+  "Poção Maior": {desc:"Cura 50% da vida máxima", type:"cura", pct:0.50, price:30},
+  "Poção Aprimorada": {desc:"Cura 75% da vida máxima", type:"cura", pct:0.75, price:50},
+  "Poção Máxima": {desc:"Cura 100% da vida máxima", type:"cura", pct:1.0, price:75},
+  "Pokébola": {desc:"Captura padrão", type:"bola", bonus:0, price:15},
+  "Great Ball": {desc:"+25% de chance de captura", type:"bola", bonus:0.25, price:40},
+  "Ultra Ball": {desc:"+50% de chance de captura", type:"bola", bonus:0.50, price:80},
+  "Master Ball": {desc:"Captura garantida (100%). Só 1 na mochila por vez; recarrega a cada 10 turnos seus.", type:"master", bonus:1.0, price:250, maxHeld:1},
+};
+const PLAYER_COLORS = ['#e8b93a','#3a9d5d','#c0392b','#2f6690','#9b59b6','#e67e22','#1abc9c','#e84393'];
+
+const SPRITE_GRID = 12;
+function hexVariant(hex, amt){
+  hex = hex.replace('#','');
+  const num = parseInt(hex,16);
+  let r=(num>>16)+amt, g=((num>>8)&0xff)+amt, b=(num&0xff)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+function hslVariant(hslStr, deltaL){
+  const m = hslStr.match(/hsl\(([\d.]+),([\d.]+)%,([\d.]+)%\)/);
+  if(!m) return hslStr;
+  const h=+m[1], s=+m[2], l=+m[3];
+  const nl = Math.max(4,Math.min(96,l+deltaL));
+  return `hsl(${h},${s}%,${nl}%)`;
+}
+function ellipseCells(cx,cy,rx,ry){
+  const cells=[];
+  for(let y=0;y<SPRITE_GRID;y++){
+    for(let x=0;x<SPRITE_GRID;x++){
+      const dx=(x+0.5-cx)/rx, dy=(y+0.5-cy)/ry;
+      if(dx*dx+dy*dy<=1) cells.push([x,y]);
+    }
+  }
+  return cells;
+}
+function rectCells(x0,y0,w,h){
+  const cells=[];
+  for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) cells.push([x,y]);
+  return cells;
+}
+/** Renderiza um mapa de células ("x,y" -> papel de cor) como pixel art, com contorno escuro
+    automático (calculado por dilatação: qualquer célula vizinha a uma célula preenchida vira contorno). */
+function renderPixelSVG(cellMap, colorMap, size, extra){
+  const filledKeys = Object.keys(cellMap);
+  const filledSet = new Set(filledKeys);
+  const deltas=[[1,0],[-1,0],[0,1],[0,-1]];
+  const outline = new Set();
+  filledKeys.forEach(key=>{
+    const [x,y]=key.split(',').map(Number);
+    deltas.forEach(([dx,dy])=>{
+      const nk=(x+dx)+','+(y+dy);
+      if(!filledSet.has(nk)) outline.add(nk);
+    });
+  });
+  let body = '';
+  outline.forEach(key=>{
+    const [x,y]=key.split(',').map(Number);
+    body += `<rect x="${x}" y="${y}" width="1" height="1" fill="#1c1408"/>`;
+  });
+  filledKeys.forEach(key=>{
+    const [x,y]=key.split(',').map(Number);
+    const role = cellMap[key];
+    body += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colorMap[role]||colorMap.B}"/>`;
+  });
+  return `<svg width="${size}" height="${size}" viewBox="-1 -1 ${SPRITE_GRID+2} ${SPRITE_GRID+2}" shape-rendering="crispEdges" style="display:block;">${body}${extra||''}</svg>`;
+}
+function trainerSpriteSVG(color, size, gender){
+  size = size || 16;
+  const light = hexVariant(color, 45);
+  const dark = hexVariant(color, -45);
+  const hairCells = rectCells(4,0,4,2);
+  const faceCells = rectCells(4,2,4,2);
+  let bodyCells, legsCells, skirtCells=[];
+  if(gender==='menina'){
+    bodyCells = rectCells(3,4,6,4);
+    skirtCells = rectCells(2,8,8,2);
+    legsCells = [...rectCells(4,10,1,2), ...rectCells(7,10,1,2)];
+  } else {
+    bodyCells = rectCells(3,4,6,5);
+    legsCells = [...rectCells(4,9,1,3), ...rectCells(7,9,1,3)];
+  }
+  const cellMap = {};
+  hairCells.forEach(([x,y])=>cellMap[x+','+y]='H');
+  faceCells.forEach(([x,y])=>cellMap[x+','+y]='K');
+  const allBody = [...bodyCells, ...skirtCells];
+  const xs = allBody.map(([x,y])=>x+y);
+  const minV=Math.min(...xs), maxV=Math.max(...xs), range=(maxV-minV)||1;
+  allBody.forEach(([x,y])=>{
+    const t=((x+y)-minV)/range;
+    cellMap[x+','+y] = t<0.3?'L':(t>0.75?'D':'B');
+  });
+  legsCells.forEach(([x,y])=>cellMap[x+','+y]='P');
+  cellMap['5,3']='E'; cellMap['6,3']='E';
+  if(gender==='menina') cellMap['4,0']='M';
+  const colorMap = {H:'#3a2a1a', K:'#ffd9a0', B:color, L:light, D:dark, P:'#2a2a2a', E:'#1c1408', M:'#e84393'};
+  return renderPixelSVG(cellMap, colorMap, size);
+}
+/* Cores de destaque para o texto da raridade (convenção de cores estilo Pokémon: cinza->verde->azul->roxo->rosa->laranja->dourado) */
+const RARITY_TEXT_COLOR = {
+  "Muito comum":"#8a8a8a","Comum":"#3a9d5d","Incomum":"#2f6690","Raro":"#8a3fc9",
+  "Muito raro":"#d1418f","Épico":"#e0781c","Lendário":"#c9a227"
+};
+function rarityLabel(rarity){
+  return `<span style="color:${RARITY_TEXT_COLOR[rarity]||'#333'}; font-weight:bold;">${rarity}</span>`;
+}
+function hpBarColor(pv, pvMax){
+  return (pv/pvMax) <= 0.25 ? 'var(--accent-red)' : 'var(--accent-green)';
+}
+/* Sistema de miniaturas: silhueta por categoria de tipo + cor única por espécie (hash do nome).
+   Isso dá a cada um dos 151 pokémons uma aparência distinta e reconhecível dentro do jogo,
+   sem reproduzir os designs oficiais protegidos por direitos autorais. */
+const TYPE_HUE = {Fogo:14, Água:205, Grama:125, Elétrico:48, Terra:32, Voador:200, Venenoso:275, Psiquico:320, Lutador:8, Dragão:250, Normal:40};
+const RARITY_LIGHT = {"Muito comum":45,"Comum":48,"Incomum":50,"Raro":52,"Muito raro":55,"Épico":58,"Lendário":80};
+const RARITY_SAT = {"Muito comum":45,"Comum":50,"Incomum":55,"Raro":60,"Muito raro":65,"Épico":70,"Lendário":25};
+function hashNum(str){ let h=0; for(let i=0;i<str.length;i++){ h = (h*131 + str.charCodeAt(i)) >>> 0; } return h; }
+function monColor(category, rarity, name){
+  const hueBase = TYPE_HUE[category]!==undefined ? TYPE_HUE[category] : 40;
+  const jitter = (hashNum(name)%30)-15;
+  const hue = ((hueBase+jitter)%360+360)%360;
+  const light = RARITY_LIGHT[rarity]||50;
+  const sat = RARITY_SAT[rarity]||50;
+  return `hsl(${hue},${sat}%,${light}%)`;
+}
+/* Pequenos "traços" extras por categoria (barbatanas, chama, folhas, asas...) que dão silhueta
+   distinta a cada grupo de tipo, além da cor. Coordenadas na grade 12x12. */
+const CATEGORY_FEATURES = {
+  'Água': [[0,6,'F'],[0,7,'F'],[11,6,'F'],[11,7,'F']],
+  'Fogo': [[5,1,'F'],[6,1,'F'],[5,0,'F']],
+  'Grama': [[3,1,'F'],[4,0,'F'],[7,0,'F'],[8,1,'F']],
+  'Elétrico': [[2,2,'F'],[9,2,'F'],[3,1,'F'],[8,1,'F']],
+  'Terra': [[3,2,'F'],[4,1,'F'],[7,1,'F'],[8,2,'F']],
+  'Voador': [[0,5,'F'],[0,6,'F'],[11,5,'F'],[11,6,'F'],[1,4,'F'],[10,4,'F']],
+  'Venenoso': [[4,1,'F'],[7,1,'F'],[5,10,'F'],[6,10,'F']],
+  'Psiquico': [[5,1,'F'],[6,1,'F'],[4,2,'F'],[7,2,'F']],
+  'Lutador': [[0,6,'F'],[0,7,'F'],[11,6,'F'],[11,7,'F']],
+  'Dragão': [[0,5,'F'],[0,6,'F'],[11,5,'F'],[11,6,'F'],[5,1,'F'],[6,1,'F']],
+  'Normal': [[3,2,'F'],[8,2,'F']]
+};
+const CATEGORY_ACCENT = {
+  'Fogo':'#ffcf6b','Grama':'#2f8a4a','Elétrico':'#fff59d','Venenoso':'#5b2a86','Psiquico':'#ffffff'
+};
+function rarityOrnament(rarity){
+  if(rarity==='Lendário') return `<rect x="4" y="-1" width="1" height="1" fill="#ffe08a"/><rect x="5" y="-1" width="2" height="1" fill="#ffe08a"/><rect x="7" y="-1" width="1" height="1" fill="#ffe08a"/>`;
+  if(rarity==='Épico') return `<rect x="10" y="-1" width="1" height="1" fill="#e8b93a"/>`;
+  if(rarity==='Muito raro') return `<rect x="0" y="-1" width="1" height="1" fill="#e8e8ff"/>`;
+  return '';
+}
+function monsterSpriteSVG(dex, size){
+  size = size || 46;
+  const category = typeCategory(dex.types[0]);
+  const base = monColor(category, dex.rarity, dex.name);
+  const light = hslVariant(base, 16);
+  const dark = hslVariant(base, -18);
+  const accent = CATEGORY_ACCENT[category] || dark;
+  const body = ellipseCells(6, 6.6, 4.6, 4.0);
+  const xs = body.map(([x,y])=>x+y);
+  const minV = Math.min(...xs), maxV = Math.max(...xs);
+  const range = (maxV-minV)||1;
+  const cellMap = {};
+  body.forEach(([x,y])=>{
+    const t = ((x+y)-minV)/range;
+    cellMap[x+','+y] = t<0.32 ? 'L' : (t>0.72 ? 'D' : 'B');
+  });
+  cellMap['4,6'] = 'E';
+  cellMap['8,6'] = 'E';
+  (CATEGORY_FEATURES[category]||[]).forEach(([x,y,role])=>{
+    if(x>=0 && x<SPRITE_GRID && y>=0 && y<SPRITE_GRID) cellMap[x+','+y]=role;
+  });
+  const colorMap = {B:base, L:light, D:dark, E:'#1c1408', F:accent};
+  return renderPixelSVG(cellMap, colorMap, size, rarityOrnament(dex.rarity));
+}
+
+/* =========================================================
+   UTILITÁRIOS DE DADO / TOAST / LOG / ATALHOS
+   ========================================================= */
+let state = null;
+let numericShortcuts = {};
+function rollDice(sides){ return Math.floor(Math.random()*sides)+1; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function showDiceToast(text){
+  const layer = document.getElementById('toastLayer');
+  while(layer.children.length >= 4){ layer.firstChild.remove(); }
+  const t = document.createElement('div');
+  t.className='dice-toast';
+  t.innerHTML = `<span class="anim-spin">🎲</span> ${text}`;
+  layer.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 2600);
+  if(state){ state.diceLog.unshift(text); state.diceLog = state.diceLog.slice(0,40); renderDiceLogPanel(); }
+}
+function rollDiceShow(sides, qty, label){
+  qty = qty || 1;
+  const rolls = [];
+  for(let i=0;i<qty;i++) rolls.push(rollDice(sides));
+  const total = rolls.reduce((a,b)=>a+b,0);
+  const rollsTxt = rolls.length>1 ? `[${rolls.join('+')}]=${total}` : `${total}`;
+  showDiceToast(`${label}: ${qty}d${sides} → ${rollsTxt}`);
+  return total;
+}
+function showBigMessage(text, kind){
+  const layer = document.getElementById('bigToastLayer');
+  const t = document.createElement('div');
+  t.className = 'big-toast ' + (kind||'good');
+  t.textContent = text;
+  layer.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),400); }, 2400);
+}
+function logEvent(msg, type){ state.history.push({turn:state.turnCount, msg, type: type||'normal'}); }
+function renderDiceLogPanel(){
+  const el = document.getElementById('diceLogPanel');
+  if(!el) return;
+  el.innerHTML = state.diceLog.map(t=>`<div>${t}</div>`).join('');
+}
+
+/* teclado: espaço inicia turno, setas/WASD movem, números 1-5 são atalhos contextuais */
+document.addEventListener('keydown', (e)=>{
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT' || tag==='TEXTAREA') return;
+  if(onlineMode && !myTurnStarted){
+    if(e.key===' ' && amIInControl()){ e.preventDefault(); confirmMyTurnStart(); }
+    return;
+  }
+  const iAmChallengeTarget = onlineMode && state && state.pendingChallengeInfo && state.pendingChallengeInfo.targetId===myPlayerId;
+  if(!iAmChallengeTarget){
+    if(state && state.players && state.players[state.currentPlayerIdx] && state.players[state.currentPlayerIdx].isBot) return;
+    if(typeof amIInControl==='function' && !amIInControl()) return;
+  }
+  if(state && state.awaitingStart){
+    if(e.key===' '){ e.preventDefault(); proceedTurn(); }
+    return;
+  }
+  const dirMap = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right', w:'up',a:'left',s:'down',d:'right', W:'up',A:'left',S:'down',D:'right'};
+  if(state && state.phase==='moving' && dirMap[e.key]){
+    const dir = dirMap[e.key];
+    const lastDir = state.moveHistory[state.moveHistory.length-1];
+    const isUndoMove = lastDir && OPPOSITE_DIR[dir]===lastDir;
+    if(state.stepsRemaining>0 || isUndoMove){ e.preventDefault(); stepMove(dir); }
+    return;
+  }
+  if(numericShortcuts[e.key]){ e.preventDefault(); numericShortcuts[e.key](); }
+});
+
+/* =========================================================
+   POKÉMON / XP
+   ========================================================= */
+/* Padrão exato de bônus por raridade: cada número é um bônus aplicado a um atributo
+   DIFERENTE dos anteriores (Força, Defesa, Velocidade ou PV — nunca repete o mesmo). */
+const RARITY_BONUS_PATTERN = {
+  "Muito comum": [],
+  "Comum": [1],
+  "Incomum": [1,1],
+  "Raro": [2,1],
+  "Muito raro": [2,1,1],
+  "Épico": [3,2,1],
+  "Lendário": [3,3,2,1]
+};
+/** Distribui os bônus da raridade entre atk/def/vel/pvMax sem repetir atributo.
+    Bônus que caem em PV valem x5 (PV base é numa escala bem maior que os outros atributos).
+    Se um array `log` for passado, registra qual atributo recebeu quanto (usado na tela de detalhes). */
+function applyRarityBonus(mon, rarity, log){
+  const pattern = RARITY_BONUS_PATTERN[rarity] || [];
+  let available = ['atk','def','vel','pv'];
+  pattern.forEach(amount=>{
+    const idx = Math.floor(Math.random()*available.length);
+    const attr = available.splice(idx,1)[0];
+    if(attr==='pv'){ mon.pvMax += amount*5; mon.pv += amount*5; if(log) log.push({attr:'Vida', amount:amount*5}); }
+    else { mon[attr] += amount; if(log) log.push({attr: attr==='atk'?'Força':attr==='def'?'Defesa':'Velocidade', amount}); }
+  });
+}
+/** Cadeias de evolução reais (usando as próprias espécies já presentes na pokédex).
+    Ao evoluir, o pokémon passa a ter o nome, raridade e tipo(s) da sua forma evoluída. */
+const EVOLUTION_MAP = {
+  "Bulbasaur":"Ivysaur", "Ivysaur":"Venusaur",
+  "Charmander":"Charmeleon", "Charmeleon":"Charizard",
+  "Squirtle":"Wartortle", "Wartortle":"Blastoise",
+  "Caterpie":"Metapod", "Metapod":"Butterfree",
+  "Weedle":"Kakuna", "Kakuna":"Beedrill",
+  "Pidgey":"Pidgeotto", "Pidgeotto":"Pidgeot",
+  "Rattata":"Raticate", "Spearow":"Fearow", "Ekans":"Arbok",
+  "Pikachu":"Raichu", "Sandshrew":"Sandslash",
+  "Nidoran♀":"Nidorina", "Nidoran♂":"Nidorino",
+  "Clefairy":"Clefable", "Vulpix":"Ninetales", "Jigglypuff":"Wigglytuff",
+  "Zubat":"Golbat", "Oddish":"Gloom", "Gloom":"Vileplume",
+  "Paras":"Parasect", "Venonat":"Venomoth", "Digglet":"Dugtrio",
+  "Meowth":"Persian", "Psyduck":"Golduck", "Mankey":"Primeape",
+  "Growlithe":"Arcanine", "Poliwag":"Poliwhirl", "Poliwhirl":"Poliwrath",
+  "Abra":"Kadabra", "Kadabra":"Alakazam",
+  "Machop":"Machoke", "Machoke":"Machamp",
+  "Bellsprout":"Weepinbell", "Weepinbell":"Victreebel",
+  "Tentacool":"Tentacruel", "Geodude":"Graveler", "Graveler":"Golem",
+  "Ponyta":"Rapidash", "Slowpoke":"Slowbro", "Magnemite":"Magneton",
+  "Doduo":"Dodrio", "Seel":"Dewgong", "Grimer":"Muk", "Shellder":"Cloyster",
+  "Gastly":"Haunter", "Haunter":"Gengar", "Drowzee":"Hypno",
+  "Krabby":"Kingler", "Voltorb":"Electrode", "Exeggcute":"Exeggutor",
+  "Cubone":"Marowak", "Koffing":"Weezing", "Rhyhorn":"Rhydon",
+  "Horsea":"Seadra", "Goldeen":"Seaking", "Staryu":"Starmie",
+  "Magikarp":"Gyarados", "Omanyte":"Omastar", "Kabuto":"Kabutops",
+  "Dratini":"Dragonair", "Dragonair":"Dragonite"
+};
+const EEVEE_EVOLUTIONS = ["Vaporeon","Jolteon","Flareon"];
+function evolutionTargetName(mon){
+  if(mon.name==='Eevee') return pick(EEVEE_EVOLUTIONS);
+  return EVOLUTION_MAP[mon.name] || null;
+}
+/** Tenta evoluir o mon se ele atingiu o nível de evolução da sua raridade e existe uma
+    próxima forma conhecida. Atualiza nome, raridade e tipo(s) para os da forma evoluída. */
+function tryEvolve(mon, player){
+  if(mon.evolved) return false;
+  const evoLvl = RARITY_INFO[mon.rarity].evoLevel;
+  if(!evoLvl || mon.level<evoLvl) return false;
+  const nextName = evolutionTargetName(mon);
+  if(!nextName) return false;
+  const nextDex = POKEDEX.find(d=>d.name===nextName);
+  if(!nextDex) return false;
+  const oldName = mon.name;
+  mon.evolved = true;
+  mon.name = nextDex.name;
+  mon.rarity = nextDex.rarity;
+  mon.types = nextDex.types;
+  mon.category = typeCategory(nextDex.types[0]);
+  mon.atk += 3; mon.def += 3; mon.vel += 2; mon.pvMax += 15; mon.pv = mon.pvMax;
+  logEvent(`✨ ${oldName} evoluiu para ${mon.name}! Agora é ${rarityLabel(mon.rarity)}, tipo ${mon.types.join(' / ')}.`);
+  if(player) processMissionEvent(player, 'evolve');
+  return true;
+}
+const STARTER_NAMES = ["Pikachu","Charmander","Squirtle","Bulbasaur"];
+/** Dá ao jogador o pokémon inicial escolhido na tela de configuração. */
+function giveStarterPokemon(p, starterName){
+  const dex = POKEDEX.find(d=>d.name===starterName) || POKEDEX.find(d=>d.name==='Pikachu');
+  const mon = newPokemonInstance(dex);
+  p.team.push(mon);
+}
+function newPokemonInstance(dexEntry){
+  const base = RARITY_INFO[dexEntry.rarity].stats;
+  const mon = {
+    id: Math.random().toString(36).slice(2,9),
+    name: dexEntry.name, rarity: dexEntry.rarity,
+    types: dexEntry.types, category: typeCategory(dexEntry.types[0]),
+    atk: base.atk, def: base.def, vel: base.vel, pvMax: base.pv, pv: base.pv,
+    level:1, xp:0, evolved:false, speedAccum:0, captureBonusLog:[]
+  };
+  applyRarityBonus(mon, dexEntry.rarity, mon.captureBonusLog);
+  mon.pv = mon.pvMax;
+  return mon;
+}
+/** Faz um pokémon "nascer" já num nível alvo, aplicando o mesmo crescimento de level up
+    (usado pros selvagens: nascem no nível do slot 1 do jogador). Não concede XP, é instantâneo. */
+function syntheticLevelUp(mon, targetLevel){
+  while(mon.level < targetLevel){
+    mon.level++;
+    mon.atk += 1; mon.def += 1; mon.vel += 1;
+    applyRarityBonus(mon, mon.rarity);
+    tryEvolve(mon, null);
+  }
+  mon.pv = mon.pvMax;
+}
+function xpToNext(level){ return 100*level; }
+function gainXP(mon, amount, player){
+  mon.xp += amount;
+  while(mon.xp >= xpToNext(mon.level)){
+    mon.xp -= xpToNext(mon.level);
+    mon.level++;
+    mon.atk += 1; mon.def += 1; mon.vel += 1;
+    applyRarityBonus(mon, mon.rarity);
+    logEvent(`${mon.name} subiu para o nível ${mon.level}! (+1 em cada atributo base, + bônus de raridade)`);
+    tryEvolve(mon, player);
+  }
+}
+
+/* =========================================================
+   SETUP
+   ========================================================= */
+function toggleGameMode(){
+  const mode = document.querySelector('input[name="gameMode"]:checked').value;
+  document.getElementById('localSetupBox').classList.toggle('hidden', mode==='online');
+  document.getElementById('onlineSetupBox').classList.toggle('hidden', mode!=='online');
+}
+function renderSetup(){
+  const el = document.getElementById('screen-setup');
+  el.innerHTML = `
+    <h2>Configurar partida</h2>
+    <h3>Modo de jogo</h3>
+    <div class="row">
+      <label><input type="radio" name="gameMode" value="local" checked onchange="toggleGameMode()"> 🏠 Local (mesmo dispositivo)</label>
+      <label><input type="radio" name="gameMode" value="online" onchange="toggleGameMode()"> 🌐 Online (sala com código)</label>
+    </div>
+
+    <div id="localSetupBox">
+      <div class="row" style="margin-top:10px;">
+        <label>Nº de jogadores (1-8):</label>
+        <input id="numPlayers" type="number" min="1" max="8" value="2">
+      </div>
+      <div id="nameFields" style="margin-top:8px;"></div>
+      <h3 style="margin-top:14px;">Tamanho do mapa</h3>
+      <div class="row">
+        <label><input type="radio" name="mapSize" value="pequeno"> Pequeno (4x4)</label>
+        <label><input type="radio" name="mapSize" value="medio" checked> Médio (6x6)</label>
+        <label><input type="radio" name="mapSize" value="grande"> Grande (8x8)</label>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button class="green" onclick="showObjectiveModal()">Iniciar partida</button>
+        <button onclick="showLoadCode()">Carregar por senha</button>
+        <button class="gold" onclick="renderTutorialModal()">❓ Como jogar (tutorial)</button>
+      </div>
+      <div id="loadCodeBox" class="hidden" style="margin-top:10px;">
+        <textarea id="loadCodeInput" rows="3" placeholder="Cole aqui a senha de save..."></textarea>
+        <button class="gold" style="margin-top:6px;" onclick="loadFromCode()">Carregar</button>
+      </div>
+    </div>
+
+    <div id="onlineSetupBox" class="hidden">
+      <p class="small" style="margin-top:8px;">Modo online: 2 jogadores, cada um no seu dispositivo. Um cria a sala, o outro entra com o código.</p>
+      <div class="row" style="border:2px solid var(--border); border-radius:3px; padding:6px; margin-bottom:6px; background:#fffdf3;">
+        <input id="onlineMyName" class="pname" placeholder="Seu nome" value="Jogador">
+        <select id="onlineMyGender"><option value="menino">Menino</option><option value="menina">Menina</option></select>
+        <select id="onlineMyColor">${PLAYER_COLORS.map(c=>`<option value="${c}" style="background:${c};">■ ${c}</option>`).join('')}</select>
+        <select id="onlineMyStarter">
+          <option value="Pikachu">⚡ Pikachu</option>
+          <option value="Charmander">🔥 Charmander</option>
+          <option value="Squirtle">💧 Squirtle</option>
+          <option value="Bulbasaur">🌿 Bulbasaur</option>
+        </select>
+      </div>
+      <h3 style="margin-top:10px;">Tamanho do mapa (definido por quem cria a sala)</h3>
+      <div class="row">
+        <label><input type="radio" name="onlineMapSize" value="pequeno"> Pequeno</label>
+        <label><input type="radio" name="onlineMapSize" value="medio" checked> Médio</label>
+        <label><input type="radio" name="onlineMapSize" value="grande"> Grande</label>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="green" onclick="createOnlineRoom()">🌐 Criar Sala</button>
+        <input id="joinRoomCode" placeholder="Código da sala" style="text-transform:uppercase;">
+        <button onclick="joinOnlineRoom()">Entrar na Sala</button>
+      </div>
+      <div id="onlineStatus" class="small" style="margin-top:8px;"></div>
+    </div>
+  `;
+  document.getElementById('numPlayers').addEventListener('input', renderNameFields);
+  renderNameFields();
+}
+function renderNameFields(){
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('numPlayers').value)||1));
+  const wrap = document.getElementById('nameFields');
+  wrap.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const color = PLAYER_COLORS[i%8];
+    wrap.innerHTML += `
+      <div class="row" style="border:2px solid var(--border); border-radius:3px; padding:6px; margin-bottom:6px; background:#fffdf3;">
+        <input class="pname" placeholder="Jogador ${i+1}" value="Jogador ${i+1}" style="flex:1; min-width:100px;">
+        <select class="pgender">
+          <option value="menino">Menino</option>
+          <option value="menina">Menina</option>
+        </select>
+        <select class="pcolor">
+          ${PLAYER_COLORS.map(c=>`<option value="${c}" ${c===color?'selected':''} style="background:${c};">■ ${c}</option>`).join('')}
+        </select>
+        <select class="pstarter">
+          <option value="Pikachu">⚡ Pikachu</option>
+          <option value="Charmander">🔥 Charmander</option>
+          <option value="Squirtle">💧 Squirtle</option>
+          <option value="Bulbasaur">🌿 Bulbasaur</option>
+        </select>
+        <span class="pcolor-preview" id="preview${i}">${trainerSpriteSVG(color,24,'menino')}</span>
+        <label class="small" style="display:flex; align-items:center; gap:4px;"><input type="checkbox" class="pbot"> 🤖 Bot</label>
+      </div>`;
+  }
+  wrap.querySelectorAll('.pgender, .pcolor').forEach((el,idx)=>{
+    el.addEventListener('change', renderSetupPreviews);
+  });
+  renderSetupPreviews();
+}
+function renderSetupPreviews(){
+  document.querySelectorAll('#nameFields .row').forEach((row,i)=>{
+    const gender = row.querySelector('.pgender').value;
+    const color = row.querySelector('.pcolor').value;
+    const preview = document.getElementById('preview'+i);
+    if(preview) preview.innerHTML = trainerSpriteSVG(color,24,gender);
+  });
+}
+function showLoadCode(){ document.getElementById('loadCodeBox').classList.remove('hidden'); }
+
+function showObjectiveModal(){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='objectiveModal';
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>🎯 Objetivo do jogo</h2>
+      <p>Explore o mapa, capture e treine pokémons. <b>O jogo termina quando todos os 5 lendários forem capturados</b> (eles só aparecem durante eventos especiais).</p>
+      <p>Quando isso acontecer, os jogadores com pokémons restantes disputam uma <b>batalha final eliminatória (3 vs 3)</b> — quem vencer todos os confrontos vira o <b>Campeão</b>!</p>
+      <p class="small">Use o Centro Pokémon pra curar seu time e a Loja pra comprar itens — ambos são zonas específicas no mapa.</p>
+      <button class="gold" onclick="document.getElementById('objectiveModal').remove(); startGame();">Entendi, começar!</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function startGame(){
+  onlineMode = false; myPlayerId = null;
+  const rows = Array.from(document.querySelectorAll('#nameFields .row'));
+  const names = rows.map(r=>r.querySelector('.pname').value || "Jogador");
+  const genders = rows.map(r=>r.querySelector('.pgender').value);
+  const colors = rows.map(r=>r.querySelector('.pcolor').value);
+  const bots = rows.map(r=>r.querySelector('.pbot').checked);
+  const starters = rows.map(r=>r.querySelector('.pstarter').value);
+  const mapSize = document.querySelector('input[name="mapSize"]:checked').value;
+  setupMap(mapSize);
+  const starts = computeStartZones(names.length);
+  state = {
+    turnCount:1, currentPlayerIdx:0, round:1,
+    eventActive:null, eventRoundsLeft:0, eventCountdown:EVENT_INTERVAL,
+    history:[], diceLog:[], gameOver:false, shopUsedThisTurn:false,
+    players: names.map((name,i)=>{
+      const zonesVisited = new Set([starts[i]]);
+      const p = {
+        id:i, name: bots[i] ? `🤖 ${name}` : name, gender:genders[i], color:colors[i], zone: starts[i], gold: 50, items:{"Poção":2,"Pokébola":5},
+        team: [], zonesVisited, pvpWins:0, isBot: bots[i],
+        eliminated:false, itemUsedThisTurn:false, turnsTaken:1, masterBallLastUsedTurn:null, challengeImmuneUntilTurn:0
+      };
+      giveStarterPokemon(p, starters[i]);
+      p.missions = [generateMission('facil',p), generateMission('media',p), generateMission('dificil',p)];
+      return p;
+    }),
+    phase: 'movement', stepsRemaining:0, running:false
+  };
+  logEvent(`Partida iniciada com ${names.length} jogador(es) em um mapa ${mapSize} (${GRID_SIZE}x${GRID_SIZE}), posicionados em pontos estratégicos.`);
+  document.getElementById('screen-setup').classList.add('hidden');
+  document.getElementById('screen-game').classList.remove('hidden');
+  renderGame();
+  renderTutorialModal();
+  if(state.players[0].isBot){
+    setTimeout(()=>{ renderBotTurnScreen(state.players[0]); setTimeout(()=>runBotTurn(state.players[0]), 900); }, 600);
+  }
+}
+
+/* =========================================================
+   TUTORIAL
+   ========================================================= */
+function renderTutorialModal(){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='tutorialModal';
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>📖 Tutorial rápido</h2>
+      <p><b>1. Movimento:</b> role o dado e ande com SETAS ou WASD. Pare quando quiser com "Confirmar posição".</p>
+      <p><b>2. Correr:</b> gasta o turno inteiro (2d6, sem ação padrão depois). Sempre pede confirmação.</p>
+      <p><b>3. Capturar/Itens:</b> use Pokébola pra capturar; compre e USE itens de cura na aba Itens, escolhendo em qual pokémon aplicar.</p>
+      <p><b>4. Time:</b> até 3 pokémons ativos (o resto vai pra mochila). Batalhas usam TODOS os 3 ativos em sequência — quando um desmaia, o próximo entra.</p>
+      <p><b>5. Centro Pokémon:</b> a zona vermelha do mapa. Parando lá, você pode gastar seu turno pra curar totalmente seus 3 pokémons principais.</p>
+      <p><b>6. Derrota:</b> perdendo pra pokémon selvagem você NÃO perde gold; perdendo pra outro jogador, perde 50% do gold. Em ambos os casos você renasce em outra zona com os pokémons curados pela metade.</p>
+      <p><b>7. Desafio PVP:</b> o alvo escolhe aceitar ou recusar. Se recusar, rola uma disputa.</p>
+      <p><b>8. Atalhos:</b> todas as rolagens aparecem na tela, e cada ação tem um número de atalho (1, 2, 3...) mostrado nos botões — aperte a tecla numérica correspondente.</p>
+      <button class="gold" onclick="document.getElementById('tutorialModal').remove()">Entendi, vamos jogar!</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+/* =========================================================
+   SAVE CODE
+   ========================================================= */
+function serializeState(){
+  const copy = JSON.parse(JSON.stringify(state, (k,v)=> v instanceof Set ? Array.from(v) : v));
+  copy.__mapMeta = { GRID_SIZE, TOTAL_ZONES, CENTER_ZONE, SHOP_ZONE, TUNNEL_ZONES: Array.from(TUNNEL_ZONES) };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(copy))));
+}
+function restoreMapMeta(obj){
+  if(obj.__mapMeta){
+    GRID_SIZE = obj.__mapMeta.GRID_SIZE;
+    TOTAL_ZONES = obj.__mapMeta.TOTAL_ZONES;
+    CENTER_ZONE = obj.__mapMeta.CENTER_ZONE;
+    SHOP_ZONE = obj.__mapMeta.SHOP_ZONE;
+    TUNNEL_ZONES = new Set(obj.__mapMeta.TUNNEL_ZONES);
+    delete obj.__mapMeta;
+  }
+}
+function generateSaveCode(){ prompt("Sua senha de save (copie e guarde):", serializeState()); }
+function loadFromCode(){
+  const raw = document.getElementById('loadCodeInput').value.trim();
+  try{
+    const obj = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    restoreMapMeta(obj);
+    obj.players.forEach(p=>{ p.zonesVisited = new Set(p.zonesVisited); });
+    state = obj;
+    document.getElementById('screen-setup').classList.add('hidden');
+    document.getElementById('screen-game').classList.remove('hidden');
+    logEvent("Save carregado por senha.");
+    renderGame();
+  }catch(e){ alert("Senha inválida ou corrompida."); }
+}
+
+/* =========================================================
+   RENDER PRINCIPAL
+   ========================================================= */
+let lastSeenTurnOwner = null;
+let myTurnStarted = true;
+function renderGame(){
+  if(state.gameOver){ renderEndgame(); return; }
+  const p0 = state.players[state.currentPlayerIdx];
+  if(onlineMode){
+    if(p0.id !== lastSeenTurnOwner){
+      lastSeenTurnOwner = p0.id;
+      myTurnStarted = false;
+    }
+    if(amIInControl() && !myTurnStarted){
+      renderOnlinePassScreen();
+      return;
+    }
+  }
+  const el = document.getElementById('screen-game');
+  const p = state.players[state.currentPlayerIdx];
+
+  el.innerHTML = `
+    <div class="game-grid">
+      <div class="col-left">
+        <div class="box">
+          <h3>${p.name}</h3>
+          <div id="quickTeamPanel"></div>
+        </div>
+      </div>
+      <div class="col-center">
+        <div class="box">
+          <div class="row" style="justify-content:space-between;">
+            <h2>Rodada ${state.round} — Turno de ${p.name} ${state.eventActive? '🌟' : ''}</h2>
+            <button class="gold" onclick="renderTutorialModal()">❓ Tutorial</button>
+          </div>
+          ${state.eventActive ? `<p class="small">🌟 Evento ativo: pokémons do tipo <b>${state.eventActive}</b> aparecem com chance de RARO/LENDÁRIO (${state.eventRoundsLeft} rodada(s) restante(s))</p>` : `<p class="small">⏳ Faltam ${state.eventCountdown} rodada(s) para o próximo evento.</p>`}
+          <div class="board-wrap"><div class="grid16" id="board"></div></div>
+        </div>
+        <div class="box">
+          <h3>🎲 Registro de rolagens</h3>
+          <div class="dicelog" id="diceLogPanel"></div>
+        </div>
+      </div>
+      <div class="col-right">
+        <div class="box">
+          <div class="tabs">
+            <button onclick="showTab('team')">Time</button>
+            <button onclick="showTab('items')">Itens & Loja</button>
+            <button onclick="showTab('mission')">Missão</button>
+            <button onclick="showTab('history')">Histórico</button>
+            <button onclick="showTab('save')">Senha/Save</button>
+          </div>
+          <div id="tab-team"></div>
+          <div id="tab-items" class="hidden"></div>
+          <div id="tab-mission" class="hidden"></div>
+          <div id="tab-history" class="hidden"></div>
+          <div id="tab-save" class="hidden"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  renderBoard();
+  renderQuickTeamPanel();
+  renderDiceLogPanel();
+  renderTeamTab();
+  renderItemsTab();
+  renderMissionTab();
+  renderHistoryTab();
+  renderSaveTab();
+  updateFloatingPanel();
+  renderChallengeModalIfNeeded();
+  if(state.activeBattle) renderBattleModal();
+  else document.getElementById('battleModal')?.remove();
+  broadcastStateIfNeeded();
+}
+function renderQuickTeamPanel(){
+  const p = state.players[state.currentPlayerIdx];
+  const wrap = document.getElementById('quickTeamPanel');
+  if(!wrap) return;
+  if(p.team.length===0){ wrap.innerHTML = '<p class="small">Sem pokémons ainda.</p>'; return; }
+  wrap.innerHTML = p.team.slice(0,MAX_ACTIVE).map((m,i)=>`
+    <div class="quick-team-card ${m.pv<=0?'fainted':''}">
+      <div class="row" style="gap:4px;">
+        <div>${monsterSpriteSVG(m,26)}</div>
+        <div style="flex:1;">
+          <b>${m.name}</b> ${m.evolved?'✨':''}<br>
+          <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${Math.max(0,100*m.pv/m.pvMax)}%; background:${hpBarColor(m.pv,m.pvMax)};"></div></div>
+          <span class="small">${m.pv}/${m.pvMax} · Lvl ${m.level}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function showTab(name){
+  ['team','items','mission','history','save'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
+  });
+}
+function renderBoard(){
+  const board = document.getElementById('board');
+  board.innerHTML='';
+  const p = state.players[state.currentPlayerIdx];
+  for(let z=1; z<=TOTAL_ZONES; z++){
+    const theme = themeOfZone(z);
+    const div = document.createElement('div');
+    const isCenter = z===CENTER_ZONE;
+    const isShop = z===SHOP_ZONE;
+    const isTunnel = TUNNEL_ZONES.has(z);
+    div.className = `tile ${isCenter?'center-zone':isShop?'shop-zone':theme.css}` + (z===p.zone ? ' current-zone' : '') + (isTunnel?' tunnel-zone':'');
+    div.title = isCenter ? `Zona ${z} — Centro Pokémon 🏥` : isShop ? `Zona ${z} — Loja 🏪` : (isTunnel ? `Zona ${z} — ${theme.name} (túnel 🌀, atravessa a borda do mapa)` : `Zona ${z} — ${theme.name}`);
+    const isEvent = !isCenter && !isShop && state.eventActive && theme.types.some(t=>typeCategory(t)===state.eventActive);
+    div.innerHTML = `<span class="zlabel">${isCenter?'🏥':isShop?'🏪':z}</span>${isTunnel?'<div class="tunnel-flag">🌀</div>':''}${isEvent?'<div class="event-flag">🌟</div>':''}<div class="tokens">${
+      state.players.filter(pl=>pl.zone===z && !pl.eliminated).map(pl=>`<div class="token-sprite ${pl.id===state.currentPlayerIdx?'current-turn-token':''}" id="tokenP${pl.id}">${trainerSpriteSVG(pl.color,13,pl.gender)}${pl.id===state.currentPlayerIdx?'<div class="turn-arrow">▲</div>':''}</div>`).join('')
+    }</div>`;
+    board.appendChild(div);
+  }
+}
+
+function renderTeamTab(){
+  const p = state.players[state.currentPlayerIdx];
+  const wrap = document.getElementById('tab-team');
+  if(p.team.length===0){ wrap.innerHTML = '<p class="small">Nenhum pokémon capturado ainda.</p>'; return; }
+  wrap.innerHTML = `<p class="small">Os 3 primeiros ("Ativos") lutam em sequência nas batalhas. Reordene quando quiser.</p>` +
+    p.team.map((m,i)=>`
+    <div class="player-card ${m.pv<=0?'fainted':''}" style="margin-bottom:6px;">
+      <span class="slot-badge ${i<MAX_ACTIVE?'ativo':'mochila'}">${i<MAX_ACTIVE? 'Ativo '+(i+1) : 'Mochila'}</span>
+      <div class="row" style="align-items:flex-start;">
+        <div>${monsterSpriteSVG(m,40)}</div>
+        <div style="flex:1;">
+          <b>${m.name}</b> ${m.evolved?'✨':''} ${m.pv<=0?'💤 Desmaiado':''} — Lvl ${m.level} — ${rarityLabel(m.rarity)} — Cat: ${m.category}<br>
+          💪 Força ${m.atk} · 🛡️ Defesa ${m.def} · ⚡ Velocidade ${m.vel} · ❤️ Vida ${m.pvMax}<br>
+          <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${Math.max(0,100*m.pv/m.pvMax)}%; background:${hpBarColor(m.pv,m.pvMax)};"></div></div>
+          <span class="small">PV ${m.pv}/${m.pvMax} — XP ${m.xp}/${xpToNext(m.level)}</span>
+        </div>
+      </div>
+      <div class="row" style="margin-top:4px;">
+        <button ${i===0?'disabled':''} onclick="reorderTeam(${i},-1)">▲ Subir</button>
+        <button ${i===p.team.length-1?'disabled':''} onclick="reorderTeam(${i},1)">▼ Descer</button>
+        <button class="gold" onclick="showMonDetailsModal('${m.id}')">ℹ️ Detalhes</button>
+      </div>
+    </div>
+  `).join('');
+}
+function showMonDetailsModal(monId){
+  const p = state.players[state.currentPlayerIdx];
+  const m = p.team.find(x=>x.id===monId);
+  if(!m) return;
+  const evoLvl = RARITY_INFO[m.rarity].evoLevel;
+  const nextName = m.evolved ? null : (m.name==='Eevee' ? 'Vaporeon/Jolteon/Flareon (aleatório)' : EVOLUTION_MAP[m.name]);
+  const bonusList = (m.captureBonusLog && m.captureBonusLog.length>0)
+    ? m.captureBonusLog.map(b=>`${b.attr} +${b.amount}`).join(', ')
+    : 'Nenhum (Muito comum não recebe bônus na captura)';
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='monDetailsModal';
+  overlay.innerHTML = `<div class="box modal">
+    <h2>${monsterSpriteSVG(m,32)} ${m.name}</h2>
+    <p>Raridade: ${rarityLabel(m.rarity)} · Categoria: ${m.category} · Tipo(s): ${m.types.join(' / ')}</p>
+    <p><b>Bônus de captura recebido:</b> ${bonusList}</p>
+    <p><b>Atributos atuais:</b> 💪 Força ${m.atk} · 🛡️ Defesa ${m.def} · ⚡ Velocidade ${m.vel} · ❤️ Vida ${m.pvMax}</p>
+    <p><b>Nível atual:</b> ${m.level} — XP ${m.xp}/${xpToNext(m.level)}</p>
+    <p><b>Evolução:</b> ${m.evolved ? '✨ já evoluiu' : (evoLvl && nextName ? `no nível ${evoLvl}, vira ${nextName}` : (evoLvl ? `no nível ${evoLvl} (mas não tem próxima forma conhecida)` : 'não evolui'))}</p>
+    <button class="gold" onclick="document.getElementById('monDetailsModal').remove()">Fechar</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function reorderTeam(i, dir){
+  const p = state.players[state.currentPlayerIdx];
+  const j = i+dir;
+  if(j<0 || j>=p.team.length) return;
+  [p.team[i], p.team[j]] = [p.team[j], p.team[i]];
+  logEvent(`${p.name} reorganizou o time.`);
+  renderTeamTab();
+}
+
+let itemsSubTab = 'inventory';
+function masterBallAvailable(p){
+  if(!(p.items['Master Ball']>0)) return false;
+  if(p.masterBallLastUsedTurn===null || p.masterBallLastUsedTurn===undefined) return true;
+  return (p.turnsTaken - p.masterBallLastUsedTurn) >= 10;
+}
+function renderItemsTab(){
+  const p = state.players[state.currentPlayerIdx];
+  const wrap = document.getElementById('tab-items');
+  const atShop = p.zone===SHOP_ZONE;
+  wrap.innerHTML = `
+    <div class="row" style="margin-bottom:8px;">
+      <button class="${itemsSubTab==='inventory'?'gold':''}" onclick="itemsSubTab='inventory'; renderItemsTab();">🎒 Meus Itens</button>
+      <button class="${itemsSubTab==='shop'?'gold':''}" onclick="itemsSubTab='shop'; renderItemsTab();">🏪 Loja</button>
+      <span style="margin-left:auto;">💰 ${p.gold}</span>
+    </div>
+    <div id="itemsSubContent"></div>
+  `;
+  const content = document.getElementById('itemsSubContent');
+  if(itemsSubTab==='inventory'){
+    const rows = Object.entries(p.items).filter(([k,v])=>v>0).map(([k,v])=>{
+      const info = ITEMS[k];
+      const canUse = info.type==='cura' && p.team.length>0 && !p.itemUsedThisTurn;
+      const isMasterOnCooldown = k==='Master Ball' && !masterBallAvailable(p);
+      return `<div class="row" style="justify-content:space-between; border-bottom:1px dashed #999; padding:4px 0;">
+        <span>${k} x${v} <span class="small">(${info.desc})</span>${isMasterOnCooldown?' <span class="small">— em recarga</span>':''}</span>
+        ${canUse ? `<button class="green" onclick="useItemPrompt('${k}')">Usar</button>` : ''}
+      </div>`;
+    }).join('');
+    content.innerHTML = (p.itemUsedThisTurn ? '<p class="small">Você já usou um item neste turno.</p>' : '') + (rows || '<p class="small">Nenhum item. Visite a Loja para comprar.</p>');
+  } else {
+    if(!atShop){
+      content.innerHTML = `<p class="small">🏪 Você precisa estar na zona da Loja (zona ${SHOP_ZONE}) para comprar itens. Vá até lá e volte nesta aba.</p>`;
+    } else {
+      content.innerHTML = Object.entries(ITEMS).map(([name,info])=>{
+        const capped = name==='Master Ball' && (p.items[name]||0) >= (info.maxHeld||Infinity);
+        return `<div class="shop-item">
+          <span><b>${name}</b> — ${info.desc}</span>
+          <span class="row"><span>💰 ${info.price}</span><button class="green" onclick="buyItem('${name}')" ${(p.gold<info.price||capped)?'disabled':''}>Comprar${capped?' (máx. 1)':''}</button></span>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+function useItemPrompt(itemName){
+  const p = state.players[state.currentPlayerIdx];
+  if(p.itemUsedThisTurn){ alert('Você já usou um item neste turno.'); return; }
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='useItemModal';
+  overlay.innerHTML = `<div class="box modal"><h2>Usar ${itemName} em qual pokémon?</h2>
+    ${p.team.map((m,i)=>`<button style="display:block;width:100%;margin-bottom:6px;text-align:left;" onclick="applyItem('${itemName}',${i})">${m.name} — PV ${m.pv}/${m.pvMax}</button>`).join('')}
+    <button class="red" onclick="document.getElementById('useItemModal').remove()">Cancelar</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function applyItem(itemName, idx){
+  const p = state.players[state.currentPlayerIdx];
+  if(p.itemUsedThisTurn){ alert('Você já usou um item neste turno.'); document.getElementById('useItemModal')?.remove(); return; }
+  const mon = p.team[idx];
+  const info = ITEMS[itemName];
+  if(!(p.items[itemName]>0)) return;
+  p.items[itemName]--;
+  const heal = Math.round(mon.pvMax * info.pct);
+  mon.pv = Math.min(mon.pvMax, mon.pv + heal);
+  p.itemUsedThisTurn = true;
+  logEvent(`${p.name} usou ${itemName} em ${mon.name} (+${heal} PV, agora com ${mon.pv}/${mon.pvMax}).`);
+  document.getElementById('useItemModal')?.remove();
+  renderItemsTab(); renderTeamTab();
+}
+function buyItem(name){
+  const p = state.players[state.currentPlayerIdx];
+  if(p.zone!==SHOP_ZONE) return;
+  const info = ITEMS[name];
+  if(p.gold<info.price) return;
+  if(name==='Master Ball' && (p.items[name]||0) >= (info.maxHeld||Infinity)){ alert('Você só pode carregar 1 Master Ball por vez.'); return; }
+  p.gold -= info.price;
+  p.items[name] = (p.items[name]||0)+1;
+  logEvent(`${p.name} comprou ${name} na loja por 💰${info.price}.`);
+  state.shopUsedThisTurn = true;
+  renderItemsTab();
+  renderBoard();
+}
+
+const TIER_LABEL = {facil:'🟢 Fácil', media:'🟡 Média', dificil:'🔴 Difícil'};
+function renderMissionTab(){
+  const p = state.players[state.currentPlayerIdx];
+  const wrap = document.getElementById('tab-mission');
+  wrap.innerHTML = `<p class="small">As missões se renovam automaticamente assim que concluídas — a recompensa é creditada na hora.</p>` +
+    p.missions.map(ms=>`
+    <div class="player-card" style="margin-bottom:6px;">
+      <b>${TIER_LABEL[ms.tier]}</b> — ${ms.desc}<br>
+      <span class="small">Progresso: ${Math.min(ms.progress,ms.target)}/${ms.target} · Recompensa: 💰${ms.rewardGold} + ${ms.rewardXp} XP</span>
+      <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${Math.min(100,100*ms.progress/ms.target)}%;"></div></div>
+    </div>
+  `).join('');
+}
+
+function renderHistoryTab(){
+  document.getElementById('tab-history').innerHTML = `<div class="log">${state.history.slice().reverse().map(h=>
+    h.type==='summary'
+      ? `<div style="background:#fff3cd; border-left:4px solid var(--accent-gold); padding:4px 6px; margin:3px 0; font-weight:bold; color:#7a5a00;">📋 [T${h.turn}] ${h.msg}</div>`
+      : `<div>[T${h.turn}] ${h.msg}</div>`
+  ).join('')}</div>`;
+}
+function renderSaveTab(){
+  document.getElementById('tab-save').innerHTML = `
+    <p class="small">Gere uma senha ao final do turno para retomar o jogo depois, em qualquer navegador.</p>
+    <button class="gold" onclick="generateSaveCode()">Gerar senha do estado atual</button>
+  `;
+}
+
+/* =========================================================
+   PAINEL FLUTUANTE ARRASTÁVEL (com atalhos numéricos)
+   ========================================================= */
+let panelPos = null;
+function ensureFloatingPanel(){
+  let panel = document.getElementById('floatingPanel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id='floatingPanel';
+    panel.innerHTML = `<div id="floatDragHandle" class="float-handle"><span>☰ Comandos</span><span class="small" style="color:#fff;">arraste</span></div><div id="floatButtons" class="float-buttons"></div>`;
+    document.body.appendChild(panel);
+    if(!panelPos) panelPos = {left: Math.max(10,window.innerWidth-260), top: 90};
+    panel.style.left = panelPos.left+'px';
+    panel.style.top = panelPos.top+'px';
+    makeDraggable(panel, document.getElementById('floatDragHandle'));
+  }
+  return panel;
+}
+function makeDraggable(el, handle){
+  let dragging=false, offX=0, offY=0;
+  const start=(x,y)=>{ dragging=true; offX=x-el.offsetLeft; offY=y-el.offsetTop; };
+  const move=(x,y)=>{ if(!dragging) return; panelPos={left:x-offX, top:y-offY}; el.style.left=panelPos.left+'px'; el.style.top=panelPos.top+'px'; };
+  const end=()=>{ dragging=false; };
+  handle.addEventListener('mousedown', e=>{ start(e.clientX,e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e=>move(e.clientX,e.clientY));
+  document.addEventListener('mouseup', end);
+  handle.addEventListener('touchstart', e=>{ const t=e.touches[0]; start(t.clientX,t.clientY); }, {passive:true});
+  document.addEventListener('touchmove', e=>{ const t=e.touches[0]; move(t.clientX,t.clientY); }, {passive:true});
+  document.addEventListener('touchend', end);
+}
+/** monta lista de botões com atalho numérico automático (1,2,3...) */
+function buildShortcutButtons(list){
+  const map = {};
+  let html = '';
+  list.forEach((item,i)=>{
+    const key = String(i+1);
+    map[key] = item.fn;
+    html += `<button class="${item.cls||''}" onclick="(${item.fn.toString()})()">${key}) ${item.label}</button>`;
+  });
+  numericShortcuts = map;
+  return html;
+}
+function updateFloatingPanel(){
+  const panel = ensureFloatingPanel();
+  const wrap = document.getElementById('floatButtons');
+  const p = state.players[state.currentPlayerIdx];
+  if(p.isBot){
+    numericShortcuts = {};
+    wrap.innerHTML = `<p class="small center">🤖 ${p.name} está jogando...</p>`;
+    return;
+  }
+  if(!amIInControl()){
+    numericShortcuts = {};
+    wrap.innerHTML = `<p class="small center">⏳ Vez de ${p.name}. Aguarde...</p>`;
+    return;
+  }
+  let html = '';
+  if(state.phase==='movement'){
+    numericShortcuts = {'1':()=>beginMovement(false), '2':()=>confirmRunPrompt()};
+    html += `<button onclick="beginMovement(false)">1) 🎲 Mover (1d6)</button>
+             <button onclick="confirmRunPrompt()">2) 🏃 Correr (2d6)</button>`;
+  } else if(state.phase==='moving'){
+    numericShortcuts = {'1':()=>confirmMovementEarly()};
+    const lastDir = state.moveHistory[state.moveHistory.length-1];
+    const canUndo = {up:false,down:false,left:false,right:false};
+    if(lastDir) canUndo[OPPOSITE_DIR[lastDir]] = true;
+    const dirDisabled = (d)=> {
+      if(state.stepsRemaining<=0 && !canUndo[d]) return 'disabled';
+      if(!canUndo[d] && neighborZone(p.zone,d)===null) return 'disabled title="Borda do mapa — sem túnel aqui"';
+      return '';
+    };
+    html += `<div class="center small">Passos restantes: <b>${state.stepsRemaining}</b>${state.moveHistory.length>0?' <span title="Pode retroceder para recuperar 1 passo">↩️</span>':''}</div>
+      <div class="dpad">
+        <div class="empty"></div><button class="dir" ${dirDisabled('up')} onclick="stepMove('up')">▲</button><div class="empty"></div>
+        <button class="dir" ${dirDisabled('left')} onclick="stepMove('left')">◀</button>
+        <div class="empty"></div>
+        <button class="dir" ${dirDisabled('right')} onclick="stepMove('right')">▶</button>
+        <div class="empty"></div><button class="dir" ${dirDisabled('down')} onclick="stepMove('down')">▼</button><div class="empty"></div>
+      </div>
+      <p class="small center">Setas ou WASD. Andar na direção contrária ao último passo recupera 1 movimento.</p>
+      <button class="gold" onclick="confirmMovementEarly()">1) ✔️ Confirmar posição</button>`;
+  } else if(state.phase==='action'){
+    const map = {};
+    let n=1;
+    if(p.zone===CENTER_ZONE){
+      html += `<button class="green" onclick="healAtCenter()">${n}) 🏥 Curar no Centro Pokémon (perde o turno)</button>`;
+      map[String(n)]=healAtCenter; n++;
+    } else if(p.zone===SHOP_ZONE){
+      html += `<p class="small">🏪 Você está na Loja — use a aba "Itens & Loja" pra comprar. Não dá pra procurar pokémon aqui.</p>`;
+    } else {
+      html += `<button onclick="doSearch()">${n}) 🔍 Procurar Pokémon</button>`;
+      map[String(n)]=doSearch; n++;
+    }
+    html += `<button onclick="tryChallenge()">${n}) ⚔️ Desafiar na zona</button>`;
+    map[String(n)]=tryChallenge; n++;
+    html += `<button class="gold" onclick="confirmEndTurn()">${n}) Encerrar turno</button>`;
+    map[String(n)]=confirmEndTurn; n++;
+    numericShortcuts = map;
+  } else if(state.phase==='end'){
+    numericShortcuts = {'1':()=>endTurn()};
+    html += `<button class="gold" onclick="endTurn()">1) Encerrar turno</button>`;
+  }
+  wrap.innerHTML = html;
+}
+
+/* =========================================================
+   MOVIMENTO
+   ========================================================= */
+function beginMovement(running){
+  const p = state.players[state.currentPlayerIdx];
+  const steps = running ? rollDiceShow(6,2,`${p.name} — Correr`) : rollDiceShow(6,1,`${p.name} — Mover`);
+  state.stepsRemaining = steps;
+  state.running = running;
+  state.moveHistory = [];
+  state.phase = 'moving';
+  if(running) logEvent(`${p.name} decidiu correr! Pode andar até ${steps} casas, mas sem ação padrão neste turno.`);
+  else logEvent(`${p.name} pode andar até ${steps} casa(s). Use as setas/WASD para escolher a direção.`);
+  renderGame();
+}
+function confirmRunPrompt(){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='runConfirmModal';
+  numericShortcuts = {
+    '1': ()=>{ document.getElementById('runConfirmModal').remove(); beginMovement(true); },
+    '2': ()=>{ document.getElementById('runConfirmModal').remove(); updateFloatingPanel(); }
+  };
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>🏃 Confirmar Correr</h2>
+      <p>Ao Correr você anda o dobro (2d6), mas <b>gasta seu turno inteiro</b> — não terá Ação Padrão depois.</p>
+      <div class="row">
+        <button class="green" onclick="document.getElementById('runConfirmModal').remove(); beginMovement(true);">1) Sim, quero correr</button>
+        <button class="red" onclick="document.getElementById('runConfirmModal').remove(); updateFloatingPanel();">2) Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+const OPPOSITE_DIR = {up:'down', down:'up', left:'right', right:'left'};
+function stepMove(dir){
+  const p = state.players[state.currentPlayerIdx];
+  const newZone = neighborZone(p.zone, dir);
+  if(newZone===null){
+    logEvent(`${p.name} bateu na borda do mapa e não conseguiu atravessar (só dá pra atravessar por um túnel 🌀).`);
+    showBigMessage(`🧱 Borda do mapa! Procure um túnel 🌀.`, 'bad');
+    renderGame();
+    return;
+  }
+  const lastDir = state.moveHistory[state.moveHistory.length-1];
+  const isUndo = lastDir && OPPOSITE_DIR[dir]===lastDir;
+  p.zone = newZone;
+  if(isUndo){
+    state.moveHistory.pop();
+    state.stepsRemaining++;
+    logEvent(`${p.name} retrocedeu, recuperando 1 movimento (voltou para a zona ${newZone}).`);
+  } else {
+    state.moveHistory.push(dir);
+    state.stepsRemaining--;
+    p.zonesVisited.add(newZone);
+    checkVisitMissions(p);
+    logEvent(`${p.name} andou para ${dir==='up'?'cima':dir==='down'?'baixo':dir==='left'?'esquerda':'direita'}, chegando na zona ${newZone} (${themeOfZone(newZone).name}).`);
+  }
+  renderGame();
+  const token = document.getElementById('tokenP'+p.id);
+  if(token) token.classList.add('anim-hop');
+}
+function confirmMovementEarly(){
+  const p = state.players[state.currentPlayerIdx];
+  logEvent(`${p.name} decidiu parar de andar (${state.stepsRemaining} passo(s) não usados).`);
+  state.stepsRemaining = 0;
+  state.moveHistory = [];
+  state.phase = state.running ? 'end' : 'action';
+  renderGame();
+}
+
+/* =========================================================
+   CENTRO POKÉMON
+   ========================================================= */
+function relocateSpecialZone(exclude1, exclude2){
+  let z;
+  let tries=0;
+  do{ z = Math.floor(Math.random()*TOTAL_ZONES)+1; tries++; } while((z===exclude1 || z===exclude2) && tries<50);
+  return z;
+}
+function healAtCenter(){
+  const p = state.players[state.currentPlayerIdx];
+  p.team.slice(0,MAX_ACTIVE).forEach(m=> m.pv = m.pvMax);
+  let newZone;
+  do{ newZone = rollDiceShow(TOTAL_ZONES,1,`Novo terreno de ${p.name} após curar`); } while(newZone===CENTER_ZONE && TOTAL_ZONES>1);
+  p.zone = newZone;
+  p.zonesVisited.add(newZone);
+  checkVisitMissions(p);
+  const oldCenter = CENTER_ZONE;
+  CENTER_ZONE = relocateSpecialZone(oldCenter, SHOP_ZONE);
+  logEvent(`${p.name} curou seus pokémons principais no Centro Pokémon e foi transportado para a zona ${newZone}. O Centro Pokémon também mudou de lugar (agora é na zona ${CENTER_ZONE}).`);
+  showBigMessage(`💊 Time curado no Centro Pokémon! Ele mudou de lugar.`, 'good');
+  state.phase='end';
+  renderGame();
+}
+
+/* =========================================================
+   ENCERRAR TURNO (com confirmação se ainda há ação disponível)
+   ========================================================= */
+function confirmEndTurn(){
+  if(state.phase==='action'){
+    const overlay = document.createElement('div');
+    overlay.className='modal-overlay'; overlay.id='endTurnConfirmModal';
+    numericShortcuts = {
+      '1': ()=>{ document.getElementById('endTurnConfirmModal').remove(); endTurn(); },
+      '2': ()=>{ document.getElementById('endTurnConfirmModal').remove(); updateFloatingPanel(); }
+    };
+    overlay.innerHTML = `<div class="box modal">
+      <h2>Encerrar turno?</h2>
+      <p>Você ainda pode Procurar Pokémon ou Desafiar outro jogador nesta zona. Deseja mesmo encerrar o turno agora?</p>
+      <div class="row">
+        <button class="red" onclick="document.getElementById('endTurnConfirmModal').remove(); endTurn();">1) Sim, encerrar</button>
+        <button onclick="document.getElementById('endTurnConfirmModal').remove(); updateFloatingPanel();">2) Não, voltar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+  } else {
+    endTurn();
+  }
+}
+
+/* =========================================================
+   PROCURAR / CAPTURAR
+   ========================================================= */
+function bestOwnedRarityIndex(p){
+  if(p.team.length===0) return 0;
+  const idxs = p.team.map(m=>RARITY_ORDER.indexOf(m.rarity));
+  return Math.max(...idxs);
+}
+function doSearch(){
+  const p = state.players[state.currentPlayerIdx];
+  const findRoll = rollDiceShow(10,1,`${p.name} — Chance de encontro (80%)`);
+  const found = findRoll <= 8;
+  if(!found){
+    logEvent(`${p.name} procurou na zona ${p.zone} mas não encontrou nenhum pokémon.`);
+    state.phase='end'; renderGame(); return;
+  }
+  const theme = themeOfZone(p.zone);
+  const eventHere = state.eventActive && theme.types.some(t=>typeCategory(t)===state.eventActive);
+  const roll20 = rollDiceShow(20,1,`${p.name} — Raridade do encontro`);
+  let rarity;
+  if(eventHere){
+    rarity = roll20<=7 ? "Muito comum" : roll20<=13 ? "Comum" : roll20<=17 ? "Incomum" : "Raro";
+  } else {
+    rarity = roll20<=8 ? "Muito comum" : roll20<=15 ? "Comum" : "Incomum";
+  }
+  const cap = Math.min(RARITY_ORDER.length-1, bestOwnedRarityIndex(p)+1);
+  let idx = Math.min(RARITY_ORDER.indexOf(rarity), cap);
+  rarity = RARITY_ORDER[idx];
+
+  let candidates = POKEDEX.filter(d=> d.rarity===rarity && (d.terrains.length===0 || d.terrains.includes(theme.id)));
+  if(eventHere){
+    const legendRoll = rollDiceShow(20,1,`${p.name} — Chance de Lendário (evento)`);
+    if(legendRoll===20){
+      const legend = POKEDEX.find(d=>d.rarity==="Lendário" && d.eventType===state.eventActive);
+      if(legend) candidates = [legend];
+    }
+  }
+  if(candidates.length===0) candidates = POKEDEX.filter(d=>d.rarity===rarity);
+  const dex = pick(candidates);
+  const instance = newPokemonInstance(dex);
+  const targetLevel = Math.max(1, (p.team[0] ? p.team[0].level : 1) - 1);
+  if(targetLevel>1) syntheticLevelUp(instance, targetLevel);
+  state.encounter = {dex, instance, playerIdx: state.currentPlayerIdx};
+  logEvent(`${p.name} encontrou um ${dex.name} (${dex.rarity}) na zona ${p.zone}!`);
+  if(p.isBot) botHandleEncounter(p);
+  else renderEncounterModal();
+}
+function captureRoll(rarity, ballBonus){
+  let success = false;
+  switch(rarity){
+    case "Muito comum": { const d=rollDiceShow(2,1,"Captura (Muito comum)"); success = d%2===0; break; }
+    case "Comum": { const d=rollDiceShow(2,1,"Captura (Comum)"); success = d%2===1; break; }
+    case "Incomum": { const d=rollDiceShow(10,1,"Captura (Incomum)"); success = [1,4,6].includes(d); break; }
+    case "Raro": { const d=rollDiceShow(12,1,"Captura (Raro)"); success = [1,9,10].includes(d); break; }
+    case "Muito raro": { const d=rollDiceShow(20,1,"Captura (Muito raro)"); success = [1,9,10,15].includes(d); break; }
+    case "Épico": { const d=rollDiceShow(20,1,"Captura (Épico)"); success = [5,10,15].includes(d); break; }
+    case "Lendário": { const d=rollDiceShow(12,1,"Captura (LENDÁRIO)"); success = d===12; break; }
+  }
+  if(success) return true;
+  if(ballBonus>0){
+    const pct = Math.round(ballBonus*100);
+    const bonusRoll = rollDiceShow(100,1,`Chance bônus da bola (+${pct}%)`);
+    if(bonusRoll<=pct) return true;
+  }
+  return false;
+}
+function renderEncounterModal(){
+  const {dex, instance} = state.encounter;
+  const p = state.players[state.currentPlayerIdx];
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='encounterModal';
+  const ballsOwned = Object.entries(ITEMS).filter(([k,v])=> (v.type==='bola'||v.type==='master') && p.items[k]>0);
+  let n=1; const map={};
+  const ballButtons = ballsOwned.map(([name,info])=>{
+    const isMaster = name==='Master Ball';
+    const disabled = isMaster && !masterBallAvailable(p);
+    const label = isMaster ? `${name} — captura garantida${disabled?' (em recarga)':''}` : `${name} (+${Math.round(info.bonus*100)}%)`;
+    const key = String(n);
+    if(!disabled) map[key] = ()=>attemptCapture(name);
+    n++;
+    return `<button class="green" onclick="attemptCapture('${name}')" ${disabled?'disabled':''}>${key}) ${label}</button>`;
+  }).join('');
+  const battleKey = String(n); map[battleKey] = ()=>startPVE(); n++;
+  const ignoreKey = String(n); map[ignoreKey] = ()=>closeEncounter();
+  numericShortcuts = map;
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>Pokémon selvagem encontrado!</h2>
+      <div class="row"><div>${monsterSpriteSVG(dex,48)}</div><div><b>${dex.name}</b><br>Raridade: ${rarityLabel(dex.rarity)}<br>Tipo: ${dex.types.join(' / ')}</div></div>
+      <div class="small" style="margin-top:6px;">💪 Força ${instance.atk} · 🛡️ Defesa ${instance.def} · ⚡ Velocidade ${instance.vel} · ❤️ Vida ${instance.pvMax}</div>
+      <div class="small">${(()=>{ const evoLvl=RARITY_INFO[dex.rarity].evoLevel; const nextName = dex.name==='Eevee' ? 'Vaporeon/Jolteon/Flareon' : EVOLUTION_MAP[dex.name]; return (evoLvl && nextName) ? `🧬 Evolui no nível ${evoLvl}, vira ${nextName} (nível atual: ${instance.level})` : '🧬 Não evolui'; })()}</div>
+      <div class="row" style="margin-top:10px; flex-direction:column; align-items:stretch;">
+        ${ballButtons || '<p class="small">Você não tem nenhuma Pokébola.</p>'}
+        <button onclick="startPVE()">${battleKey}) Batalhar</button>
+        <button class="red" onclick="closeEncounter()">${ignoreKey}) Ignorar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function closeEncounter(){
+  document.getElementById('encounterModal')?.remove();
+  state.phase='end';
+  renderGame();
+}
+function attemptCapture(ballName){
+  const p = state.players[state.currentPlayerIdx];
+  const {dex} = state.encounter;
+  const ballInfo = ITEMS[ballName];
+  if(!(p.items[ballName]>0)) return;
+  p.items[ballName]--;
+  const modal = document.getElementById('encounterModal');
+  if(modal) modal.classList.add('anim-shake');
+  setTimeout(()=>{
+    let success;
+    if(ballName==='Master Ball'){
+      success = true;
+      p.masterBallLastUsedTurn = p.turnsTaken;
+      logEvent(`${p.name} usou uma Master Ball — captura garantida!`);
+    } else {
+      success = captureRoll(dex.rarity, ballInfo.bonus);
+    }
+    if(success){
+      const mon = state.encounter.instance;
+      p.team.push(mon);
+      processMissionEvent(p, 'capture', {types:dex.types, rarity:dex.rarity});
+      logEvent(`${p.name} capturou ${dex.name}!${p.team.length>MAX_ACTIVE?' Foi para a mochila.':''}`);
+      showBigMessage(`🎉 ${p.name} capturou ${dex.name}!`, 'good');
+      if(LEGENDARY_NAMES.includes(dex.name)) checkLegendariesComplete();
+    } else {
+      logEvent(`${p.name} tentou capturar ${dex.name} com ${ballName}, mas fugiu.`);
+      showBigMessage(`😢 ${dex.name} fugiu da captura!`, 'bad');
+    }
+    closeEncounter();
+  }, 450);
+}
+function checkLegendariesComplete(){
+  const capturedLegendaries = new Set();
+  state.players.forEach(p=>p.team.forEach(m=>{ if(LEGENDARY_NAMES.includes(m.name)) capturedLegendaries.add(m.name); }));
+  if(LEGENDARY_NAMES.every(n=>capturedLegendaries.has(n))){
+    logEvent(`🏆 Todos os lendários foram capturados! Iniciando a batalha final PVP...`);
+    startFinalBracket();
+  }
+}
+
+/* =========================================================
+   BATALHA — cada lado usa até 3 pokémon em sequência
+   ========================================================= */
+function activeOf(side){ return side.team[side.currentIndex]; }
+function tryAdvance(side){
+  const before = side.currentIndex;
+  while(side.currentIndex < side.team.length && side.team[side.currentIndex].pv<=0){ side.currentIndex++; }
+  if(side.currentIndex < side.team.length){
+    if(side.currentIndex !== before){
+      side.team[side.currentIndex].speedAccum = side.team[side.currentIndex].vel;
+    }
+    return true;
+  }
+  return false;
+}
+function sideHasFighter(p){ return p.team.slice(0,MAX_ACTIVE).some(m=>m.pv>0); }
+
+function startPVE(){
+  document.getElementById('encounterModal')?.remove();
+  const p = state.players[state.currentPlayerIdx];
+  if(!sideHasFighter(p)){ if(!p.isBot) alert(`Todos os seus pokémons principais estão desmaiados. Cure-os antes de batalhar.`); state.phase='end'; renderGame(); return; }
+  const enemy = state.encounter.instance;
+  const sideA = {player:p, team: p.team.slice(0,MAX_ACTIVE), currentIndex:0};
+  const sideB = {player:null, team: [enemy], currentIndex:0};
+  tryAdvance(sideA); tryAdvance(sideB);
+  runBattle({type:'PVE', a:sideA, b:sideB});
+}
+
+let pendingChallenge = null;
+function tryChallenge(){
+  const p = state.players[state.currentPlayerIdx];
+  const sameZone = state.players.filter(o=>o.id!==p.id && !o.eliminated && o.zone===p.zone);
+  const others = sameZone.filter(o=> !(o.challengeImmuneUntilTurn && o.turnsTaken < o.challengeImmuneUntilTurn));
+  if(sameZone.length>0 && others.length===0){
+    if(!p.isBot) alert(`${sameZone[0].name} está protegido contra desafios (foi desafiado recentemente).`);
+    return;
+  }
+  if(others.length===0){ if(!p.isBot) alert("Não há outro jogador nesta zona."); return; }
+  const target = others[0];
+  if(!sideHasFighter(target)){ if(!p.isBot) alert(`${target.name} não tem pokémons saudáveis para batalhar.`); return; }
+  if(!sideHasFighter(p)){ if(!p.isBot) alert(`Seus pokémons principais estão todos desmaiados.`); return; }
+  pendingChallenge = {challenger:p, target};
+  target.challengeImmuneUntilTurn = target.turnsTaken + 3;
+  logEvent(`${target.name} fica protegido contra novos desafios pelas próximas 3 rodadas dele.`);
+  if(target.isBot){
+    logEvent(`${p.name} desafiou ${target.name}!`);
+    setTimeout(()=>respondChallenge(true), 500);
+    return;
+  }
+  if(onlineMode){
+    state.pendingChallengeInfo = {challengerId:p.id, targetId:target.id, deadline: Date.now()+30000, challengerName:p.name, targetName:target.name};
+    logEvent(`${p.name} desafiou ${target.name}! ${target.name} tem 30 segundos pra responder.`);
+    renderGame();
+    if(challengeTimer) clearTimeout(challengeTimer);
+    challengeTimer = setTimeout(()=>{ if(pendingChallenge){ logEvent(`Tempo esgotado — desafio aceito automaticamente.`); respondChallenge(true); } }, 30500);
+    return;
+  }
+  showLocalChallengeModal(p, target);
+}
+function showLocalChallengeModal(p, target){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='challengeModal';
+  numericShortcuts = { '1': ()=>respondChallenge(true), '2': ()=>respondChallenge(false) };
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>⚔️ Desafio PVP!</h2>
+      <p>${p.name} desafia <b>${target.name}</b> para uma batalha (3 vs 3)! ${target.name}, você aceita?</p>
+      <div class="row">
+        <button class="green" onclick="respondChallenge(true)">1) Aceitar</button>
+        <button class="red" onclick="respondChallenge(false)">2) Recusar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+/** Renderiza a tela de desafio pendente em modo online: quem foi desafiado vê botões
+    com cronômetro de 30s; os demais veem uma tela passiva de "aguardando resposta". */
+function renderChallengeModalIfNeeded(){
+  if(!onlineMode) return;
+  if(!state.pendingChallengeInfo){ document.getElementById('challengeModal')?.remove(); return; }
+  if(document.getElementById('challengeModal')) return;
+  const info = state.pendingChallengeInfo;
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='challengeModal';
+  const amTarget = info.targetId===myPlayerId;
+  if(amTarget){
+    const secondsLeft = Math.max(0, Math.round((info.deadline-Date.now())/1000));
+    numericShortcuts = { '1': ()=>respondOnlineChallenge(true), '2': ()=>respondOnlineChallenge(false) };
+    overlay.innerHTML = `
+      <div class="box modal">
+        <h2>⚔️ Desafio PVP!</h2>
+        <p>${info.challengerName} desafia você para uma batalha (3 vs 3)!</p>
+        <p class="small">Responda em <b><span id="challengeCountdown">${secondsLeft}</span>s</b> — se o tempo acabar, o desafio é aceito automaticamente.</p>
+        <div class="row">
+          <button class="green" onclick="respondOnlineChallenge(true)">1) Aceitar</button>
+          <button class="red" onclick="respondOnlineChallenge(false)">2) Recusar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const iv = setInterval(()=>{
+      const el = document.getElementById('challengeCountdown');
+      if(!el || !document.getElementById('challengeModal')){ clearInterval(iv); return; }
+      const s = Math.max(0, Math.round((info.deadline-Date.now())/1000));
+      el.textContent = s;
+      if(s<=0) clearInterval(iv);
+    }, 500);
+  } else {
+    overlay.innerHTML = `
+      <div class="box modal">
+        <h2>⚔️ Desafio PVP em andamento</h2>
+        <p>${info.challengerName} desafiou ${info.targetName}. Aguardando resposta (até 30s)...</p>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+}
+function respondOnlineChallenge(accepted){
+  document.getElementById('challengeModal')?.remove();
+  netSend({type:'challengeResponse', accepted});
+}
+function respondChallenge(accepted){
+  document.getElementById('challengeModal')?.remove();
+  if(challengeTimer){ clearTimeout(challengeTimer); challengeTimer=null; }
+  if(onlineMode) state.pendingChallengeInfo = null;
+  const {challenger, target} = pendingChallenge;
+  if(!accepted){
+    showBigMessage(`🚫 ${target.name} recusou o desafio!`, 'bad');
+    const d1=rollDiceShow(6,1,`Disputa de recusa — ${challenger.name}`), d2=rollDiceShow(6,1,`Disputa de recusa — ${target.name}`);
+    logEvent(`${target.name} recusou o desafio. Disputa: ${challenger.name} tirou ${d1}, ${target.name} tirou ${d2}.`);
+    if(d1<=d2){ logEvent(`${target.name} venceu a disputa e a batalha não ocorre.`); state.phase='end'; renderGame(); return; }
+    logEvent(`${challenger.name} venceu a disputa — a batalha ocorre mesmo assim!`);
+  } else {
+    logEvent(`${target.name} aceitou o desafio!`);
+  }
+  const sideA = {player:challenger, team: challenger.team.slice(0,MAX_ACTIVE), currentIndex:0};
+  const sideB = {player:target, team: target.team.slice(0,MAX_ACTIVE), currentIndex:0};
+  tryAdvance(sideA); tryAdvance(sideB);
+  runBattle({type:'PVP', a:sideA, b:sideB});
+}
+
+function runBattle(battle){
+  battle.turn = 1;
+  battle.log = [];
+  state.activeBattle = battle;
+  renderBattleModal();
+}
+function battleAdvantageMultiplier(attackerCat, defenderCat){
+  const list = ADVANTAGE[attackerCat];
+  return (list && list.includes(defenderCat)) ? 1.5 : 1;
+}
+function battleMatchupText(aMon, bMon){
+  const aAdv = battleAdvantageMultiplier(aMon.category, bMon.category) > 1;
+  const bAdv = battleAdvantageMultiplier(bMon.category, aMon.category) > 1;
+  if(aAdv && !bAdv) return `🔺 <b>${aMon.name}</b> tem VANTAGEM de tipo contra ${bMon.name} (dano x1.5)!`;
+  if(bAdv && !aAdv) return `🔻 <b>${bMon.name}</b> tem VANTAGEM de tipo contra ${aMon.name} (dano x1.5)!`;
+  if(aAdv && bAdv) return `⚔️ Vantagem cruzada — ambos causam x1.5 de dano um no outro!`;
+  return `➖ Sem vantagem de tipo neste confronto.`;
+}
+function getHumanSide(b){
+  const aMon0=activeOf(b.a), bMon0=activeOf(b.b);
+  const first = aMon0.speedAccum>=bMon0.speedAccum? b.a : b.b;
+  const second = first===b.a? b.b : b.a;
+  return first.player? first : (second.player? second : first);
+}
+function renderBattleModal(){
+  const b = state.activeBattle;
+  let overlay = document.getElementById('battleModal');
+  if(!overlay){ overlay = document.createElement('div'); overlay.id='battleModal'; document.body.appendChild(overlay); }
+  overlay.className='modal-overlay';
+  const aMon = activeOf(b.a), bMon = activeOf(b.b);
+  const first = aMon.speedAccum >= bMon.speedAccum ? b.a : b.b;
+  const attackerLabel = (first===b.a ? (b.a.player?b.a.player.name:'Selvagem') : (b.b.player?b.b.player.name:'Selvagem'));
+  const aLeft = b.a.team.slice(0,MAX_ACTIVE).filter(m=>m.pv>0).length;
+  const bLeft = b.b.team.slice(0,MAX_ACTIVE).filter(m=>m.pv>0).length;
+  const humanSide = getHumanSide(b);
+  const canSwitch = humanSide.player && humanSide.team.some((m,i)=> i!==humanSide.currentIndex && m.pv>0);
+  const actorIsBot = humanSide.player && humanSide.player.isBot;
+  const iAmSpectatorOnline = onlineMode && !amIInControl();
+  const showControls = !actorIsBot && !iAmSpectatorOnline;
+  const canFlee = b.type!=='PVP' && b.type!=='PVP-FINAL';
+  let n = 1;
+  const shortcuts = {};
+  let buttonsHtml = '';
+  if(showControls){
+    shortcuts[String(n)] = ()=>battleAction('attack'); buttonsHtml += `<button onclick="battleAction('attack')">${n}) Atacar</button>`; n++;
+    shortcuts[String(n)] = ()=>battleAction('item'); buttonsHtml += `<button onclick="battleAction('item')">${n}) Usar item</button>`; n++;
+    if(canFlee){ shortcuts[String(n)] = ()=>battleAction('flee'); buttonsHtml += `<button class="red" onclick="battleAction('flee')">${n}) Fugir</button>`; n++; }
+    if(canSwitch){ shortcuts[String(n)] = ()=>battleSwitchRequest(); buttonsHtml += `<button onclick="battleSwitchRequest()">${n}) Trocar pokémon</button>`; n++; }
+    else { buttonsHtml += `<button disabled title="Sem outro pokémon disponível">Trocar pokémon</button>`; }
+  }
+  numericShortcuts = shortcuts;
+  overlay.innerHTML = `
+    <div class="box modal">
+      <h2>Batalha ${b.type} — Turno ${b.turn}</h2>
+      <div class="row">
+        <div class="player-card" id="battleSideA">${monsterSpriteSVG(aMon,34)}<b>${aMon.name}</b> (${b.a.player?b.a.player.name:'Selvagem'})<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${100*Math.max(0,aMon.pv)/aMon.pvMax}%; background:${hpBarColor(aMon.pv,aMon.pvMax)};"></div></div>❤️${Math.max(0,aMon.pv)}/${aMon.pvMax} · 💪${aMon.atk} · 🛡️${aMon.def} · ⚡${aMon.vel}<div class="small">Restam ${aLeft} na equipe</div></div>
+        <div class="player-card" id="battleSideB">${monsterSpriteSVG(bMon,34)}<b>${bMon.name}</b> (${b.b.player?b.b.player.name:'Selvagem'})<div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${100*Math.max(0,bMon.pv)/bMon.pvMax}%; background:${hpBarColor(bMon.pv,bMon.pvMax)};"></div></div>❤️${Math.max(0,bMon.pv)}/${bMon.pvMax} · 💪${bMon.atk} · 🛡️${bMon.def} · ⚡${bMon.vel}<div class="small">Restam ${bLeft} na equipe</div></div>
+      </div>
+      <p class="small" style="background:#fffdf3; border:2px solid var(--border); border-radius:3px; padding:4px 8px;">${battleMatchupText(aMon,bMon)}</p>
+      <p class="small">Turno de: <b>${attackerLabel}</b> (${first===b.a?aMon.name:bMon.name})</p>
+      <div class="log" id="battleLog">${b.log.slice().reverse().map(l=>`<div>${l}</div>`).join('')}</div>
+      ${!showControls ? `<p class="small center">${actorIsBot? `🤖 ${humanSide.player.name} está decidindo...` : '⏳ Aguardando a jogada do oponente...'}</p>` : `
+      <div class="row" style="margin-top:8px;">
+        ${buttonsHtml}
+      </div>`}
+    </div>
+  `;
+  broadcastStateIfNeeded();
+  if(actorIsBot && amIInControl()){ setTimeout(()=>autoBattleTurn(), 700); }
+}
+function battleSwitchRequest(){
+  openSwitchPicker();
+}
+function openSwitchPicker(){
+  const b = state.activeBattle;
+  const humanSide = getHumanSide(b);
+  const options = humanSide.team.map((m,i)=>({m,i})).filter(o=> o.i!==humanSide.currentIndex && o.m.pv>0);
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='switchPickerModal';
+  if(options.length===0){
+    overlay.innerHTML = `<div class="box modal"><h2>Sem pokémon disponível pra trocar</h2><button onclick="document.getElementById('switchPickerModal').remove()">Voltar</button></div>`;
+  } else {
+    overlay.innerHTML = `<div class="box modal">
+      <h2>Trocar para qual pokémon?</h2>
+      <p class="small">⚠️ O oponente ganha um ataque automático contra o pokémon que entrar, e a velocidade acumulada zera pros dois lados.</p>
+      ${options.map(o=>`<button style="display:block;width:100%;margin-bottom:6px;text-align:left;" onclick="document.getElementById('switchPickerModal').remove(); performSwitch(${o.i});">${o.m.name} — PV ${o.m.pv}/${o.m.pvMax}</button>`).join('')}
+      <button class="red" onclick="document.getElementById('switchPickerModal').remove()">Cancelar</button>
+    </div>`;
+  }
+  document.body.appendChild(overlay);
+}
+function performSwitch(switchIdx){
+  const b = state.activeBattle;
+  const humanSide = getHumanSide(b);
+  const oppSide = humanSide===b.a ? b.b : b.a;
+  const oldMon = activeOf(humanSide);
+  const cur = humanSide.currentIndex;
+  const tmp = humanSide.team[cur];
+  humanSide.team[cur] = humanSide.team[switchIdx];
+  humanSide.team[switchIdx] = tmp;
+  const newMon = activeOf(humanSide);
+  b.log.push(`${humanSide.player.name} trocou ${oldMon.name} por ${newMon.name}!`);
+  newMon.speedAccum = newMon.vel;
+  if(activeOf(oppSide)) activeOf(oppSide).speedAccum = activeOf(oppSide).vel;
+  if(activeOf(oppSide) && activeOf(oppSide).pv>0 && newMon.pv>0){
+    const att = activeOf(oppSide), def = newMon;
+    const r1 = rollDiceShow(20,1,`${att.name} aproveita a troca e ataca (+${att.atk})`) + att.atk;
+    const r2 = rollDiceShow(20,1,`${def.name} defende (+${def.def})`) + def.def;
+    if(r1>r2){
+      let dmg = r1-r2;
+      const mult = battleAdvantageMultiplier(att.category, def.category);
+      dmg = Math.round(dmg*mult);
+      def.pv = Math.max(0, def.pv - dmg);
+      b.log.push(`${att.name} atacou ${def.name} durante a troca e causou ${dmg} de dano${mult>1?' (vantagem de tipo x1.5!)':''}.`);
+      const el = document.getElementById(humanSide===b.a?'battleSideA':'battleSideB');
+      if(el){ el.classList.add('anim-shake'); setTimeout(()=>el.classList.remove('anim-shake'),400); }
+      if(def.pv<=0){
+        b.log.push(`${def.name} desmaiou!`);
+        const hasMore = tryAdvance(humanSide);
+        if(hasMore) b.log.push(`${humanSide.player.name} enviou ${activeOf(humanSide).name} para a batalha!`);
+      }
+    } else {
+      b.log.push(`${att.name} tentou aproveitar a troca mas ${def.name} esquivou!`);
+    }
+  }
+  const aDefeated = !tryAdvance(b.a) && (!activeOf(b.a) || activeOf(b.a).pv<=0);
+  const bDefeated = !tryAdvance(b.b) && (!activeOf(b.b) || activeOf(b.b).pv<=0);
+  if(aDefeated || bDefeated){
+    const winner = aDefeated && bDefeated ? null : (aDefeated ? b.b : b.a);
+    finishBattle(winner);
+    return;
+  }
+  b.turn++;
+  renderBattleModal();
+}
+function openBattleItemPicker(humanSide){
+  const p = humanSide.player;
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='battleItemPicker';
+  if(!p){
+    overlay.innerHTML = `<div class="box modal"><h2>Sem itens</h2><button onclick="document.getElementById('battleItemPicker').remove()">Voltar</button></div>`;
+  } else if(p.itemUsedThisTurn){
+    overlay.innerHTML = `<div class="box modal"><h2>Item já usado</h2><p>Você já usou um item neste turno.</p><button onclick="document.getElementById('battleItemPicker').remove()">Voltar</button></div>`;
+  } else {
+    const curaOwned = Object.entries(ITEMS).filter(([k,v])=>v.type==='cura' && p.items[k]>0);
+    if(curaOwned.length===0){
+      overlay.innerHTML = `<div class="box modal"><h2>Sem poções disponíveis</h2><button onclick="document.getElementById('battleItemPicker').remove()">Voltar</button></div>`;
+    } else {
+      overlay.innerHTML = `<div class="box modal"><h2>Qual item usar?</h2>
+        ${curaOwned.map(([k,v])=>`<button style="display:block;width:100%;margin-bottom:6px;text-align:left;" onclick="document.getElementById('battleItemPicker').remove(); battleAction('item','${k}');">${k} x${p.items[k]} — ${v.desc}</button>`).join('')}
+        <button class="red" onclick="document.getElementById('battleItemPicker').remove()">Cancelar</button>
+      </div>`;
+    }
+  }
+  document.body.appendChild(overlay);
+}
+function battleAction(action, itemName){
+  const b = state.activeBattle;
+  const aMon0 = activeOf(b.a), bMon0 = activeOf(b.b);
+  const first = aMon0.speedAccum >= bMon0.speedAccum ? b.a : b.b;
+  const second = first===b.a ? b.b : b.a;
+  const humanSide = first.player ? first : (second.player ? second : first);
+
+  if(action==='item' && !itemName){ openBattleItemPicker(humanSide); return; }
+
+  function flashHit(side){
+    const el = document.getElementById(side===b.a?'battleSideA':'battleSideB');
+    if(el){ el.classList.add('anim-shake'); setTimeout(()=>el.classList.remove('anim-shake'),400); }
+  }
+  function doAttack(attSide, defSide){
+    if(!activeOf(attSide) || activeOf(attSide).pv<=0) return;
+    if(!activeOf(defSide) || activeOf(defSide).pv<=0) return;
+    const att = activeOf(attSide), def = activeOf(defSide);
+    const r1 = rollDiceShow(20,1,`${att.name} ataca (+${att.atk})`) + att.atk;
+    const r2 = rollDiceShow(20,1,`${def.name} defende (+${def.def})`) + def.def;
+    if(r1>r2){
+      let dmg = r1-r2;
+      const mult = battleAdvantageMultiplier(att.category, def.category);
+      dmg = Math.round(dmg*mult);
+      def.pv = Math.max(0, def.pv - dmg);
+      b.log.push(`${att.name} atacou ${def.name} e causou ${dmg} de dano${mult>1?' (vantagem de tipo x1.5!)':''}.`);
+      flashHit(defSide);
+      if(def.pv<=0){
+        b.log.push(`${def.name} desmaiou!`);
+        const hasMore = tryAdvance(defSide);
+        if(hasMore) b.log.push(`${defSide.player?defSide.player.name:'A natureza'} enviou ${activeOf(defSide).name} para a batalha!`);
+      }
+    } else {
+      b.log.push(`${att.name} atacou mas ${def.name} esquivou!`);
+    }
+  }
+
+  if(action==='attack'){
+    doAttack(first, second);
+    if(activeOf(second) && activeOf(second).pv>0 && activeOf(first) && activeOf(first).pv>0 && activeOf(first).speedAccum >= 2*activeOf(second).speedAccum){
+      b.log.push(`${activeOf(first).name} é rápido o bastante para atacar novamente!`);
+      doAttack(first, second);
+    }
+  } else if(action==='item'){
+    const p = humanSide.player;
+    if(p && p.itemUsedThisTurn){
+      b.log.push(`${p.name} já usou um item neste turno.`);
+    } else if(p && p.items[itemName]>0){
+      p.items[itemName]--;
+      p.itemUsedThisTurn = true;
+      const mon = activeOf(humanSide);
+      const heal = Math.round(mon.pvMax * ITEMS[itemName].pct);
+      mon.pv = Math.min(mon.pvMax, mon.pv+heal);
+      b.log.push(`${p.name} usou ${itemName} em ${mon.name} (+${heal} PV).`);
+    } else {
+      b.log.push(`Sem itens disponíveis.`);
+    }
+  } else if(action==='flee'){
+    const fled = rollDiceShow(2,1,`Tentativa de fuga`)===1;
+    if(fled){ b.log.push(`${humanSide.player?humanSide.player.name:'Alguém'} fugiu da batalha.`); finishBattle(null); return; }
+    else { b.log.push(`A fuga falhou!`); doAttack(second, first); }
+  }
+  if(action!=='flee'){
+    if(activeOf(second) && activeOf(second).pv>0 && activeOf(first) && activeOf(first).pv>0){
+      doAttack(second, first);
+      if(activeOf(first) && activeOf(first).pv>0 && activeOf(second) && activeOf(second).pv>0 && activeOf(second).speedAccum >= 2*activeOf(first).speedAccum){
+        doAttack(second, first);
+      }
+    }
+  }
+
+  const aDefeated = !tryAdvance(b.a) && (!activeOf(b.a) || activeOf(b.a).pv<=0);
+  const bDefeated = !tryAdvance(b.b) && (!activeOf(b.b) || activeOf(b.b).pv<=0);
+  if(aDefeated || bDefeated){
+    const winner = aDefeated && bDefeated ? null : (aDefeated ? b.b : b.a);
+    finishBattle(winner);
+    return;
+  }
+  b.turn++;
+  activeOf(b.a).speedAccum += activeOf(b.a).vel;
+  activeOf(b.b).speedAccum += activeOf(b.b).vel;
+  renderBattleModal();
+}
+
+function getParticipants(side){
+  const cappedEnd = side.currentIndex >= side.team.length ? side.team.length-1 : side.currentIndex;
+  return side.team.slice(0, cappedEnd+1);
+}
+/** Distribui XP entre os pokémons do lado vencedor seguindo a regra original:
+    o pokémon que decidiu a batalha leva 60%, e o restante (40%) é dividido
+    igualmente entre os outros pokémons que também lutaram. Se só um lutou, leva 100%. */
+function distributeBattleXP(winnerSide, totalXP, player){
+  const participants = getParticipants(winnerSide);
+  const winMon = participants[participants.length-1];
+  const others = participants.slice(0,-1);
+  if(others.length===0){
+    gainXP(winMon, totalXP, player);
+    logEvent(`${winMon.name} venceu sozinho e ganhou ${totalXP} XP!`);
+    return {winMonName:winMon.name, winXP:totalXP, othersXP:[]};
+  }
+  const winXP = Math.round(totalXP*0.6);
+  const remaining = totalXP - winXP;
+  const share = Math.round(remaining/others.length);
+  gainXP(winMon, winXP, player);
+  logEvent(`${winMon.name} decidiu a batalha e ganhou ${winXP} XP (60%)!`);
+  const othersXP = others.map(m=>{
+    gainXP(m, share, player);
+    logEvent(`${m.name} também lutou nessa batalha e ganhou ${share} XP.`);
+    return {name:m.name, xp:share};
+  });
+  return {winMonName:winMon.name, winXP, othersXP};
+}
+function finishBattle(winnerSide){
+  const b = state.activeBattle;
+  document.getElementById('battleModal')?.remove();
+  const loserSide = winnerSide===b.a ? b.b : (winnerSide===b.b ? b.a : null);
+  const aFaintedCount = b.a.team.slice(0,MAX_ACTIVE).filter(m=>m.pv<=0).length;
+  const bFaintedCount = b.b.team.slice(0,MAX_ACTIVE).filter(m=>m.pv<=0).length;
+  const roundsFought = b.turn;
+  let xpAwarded = 0, winMonName = '', loserGoldLost = 0, othersXP = [];
+  if(winnerSide && winnerSide.player){
+    const xp = (b.type==='PVP'||b.type==='PVP-FINAL') ? 250 : RARITY_INFO[state.encounter ? state.encounter.dex.rarity : "Comum"].xpPVE;
+    const result = distributeBattleXP(winnerSide, xp, winnerSide.player);
+    xpAwarded = xp; winMonName = result.winMonName; othersXP = result.othersXP;
+    showBigMessage(`🏆 ${winnerSide.player.name} venceu a batalha!`, 'good');
+    if(b.type==='PVP'||b.type==='PVP-FINAL'){
+      winnerSide.player.pvpWins = (winnerSide.player.pvpWins||0)+1;
+      processMissionEvent(winnerSide.player, 'pvp_win');
+    }
+    if(b.type==='PVE'){
+      winnerSide.player.gold += 5;
+      logEvent(`${winnerSide.player.name} ganhou 💰5 de gold por derrotar o pokémon selvagem.`);
+      processMissionEvent(winnerSide.player, 'pve_win');
+    }
+  }
+  if(loserSide && loserSide.player){
+    const p = loserSide.player;
+    if(b.type==='PVP' || b.type==='PVP-FINAL'){
+      loserGoldLost = p.gold - Math.floor(p.gold*0.5);
+      p.gold = Math.floor(p.gold*0.5);
+      logEvent(`${p.name} perdeu 50% do gold por ser derrotado em PVP.`);
+    } else {
+      logEvent(`${p.name} foi derrotado pelo pokémon selvagem, mas não perde gold.`);
+    }
+    if(b.type==='PVP'){
+      p.zone = CENTER_ZONE;
+      p.zonesVisited.add(CENTER_ZONE);
+      p.team.slice(0,MAX_ACTIVE).forEach(m=>{ m.pv = m.pvMax; });
+      logEvent(`${p.name} foi levado ao Centro Pokémon (zona ${CENTER_ZONE}) e teve seus 3 pokémons principais curados por completo.`);
+    } else {
+      p.zone = rollDiceShow(TOTAL_ZONES,1,`Zona de reaparecimento de ${p.name}`);
+      if(p.team[0]){ p.team[0].pv = Math.max(1, Math.round(p.team[0].pvMax*0.25)); }
+      logEvent(`${p.name} renasceu na zona ${p.zone}. Só ${p.team[0]?p.team[0].name:'o pokémon do slot 1'} voltou, com 25% de vida.`);
+    }
+    showBigMessage(`💫 ${p.name} foi derrotado e renasceu!`, 'bad');
+  } else if(!winnerSide){
+    logEvent(`A batalha terminou sem vencedor definido (fuga).`);
+  }
+  state.activeBattle = null;
+  state.encounter = null;
+  state.phase='end';
+  renderGame();
+  if(b.type==='PVP' && winnerSide && loserSide && winnerSide.player && loserSide.player){
+    showBattleSummaryModal({
+      winnerName: winnerSide.player.name, winMonName, xp: xpAwarded, othersXP,
+      aName: b.a.player.name, bName: b.b.player.name,
+      aFainted: aFaintedCount, bFainted: bFaintedCount,
+      aTotal: b.a.team.slice(0,MAX_ACTIVE).length, bTotal: b.b.team.slice(0,MAX_ACTIVE).length,
+      rounds: roundsFought, loserName: loserSide.player.name, goldLost: loserGoldLost
+    });
+  }
+}
+function showBattleSummaryModal(info){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='battleSummaryModal';
+  numericShortcuts = {'1': ()=>{ document.getElementById('battleSummaryModal').remove(); numericShortcuts={}; }};
+  const othersLine = info.othersXP && info.othersXP.length>0
+    ? `<p class="small">Também lutaram: ${info.othersXP.map(o=>`${o.name} (+${o.xp} XP)`).join(', ')}</p>` : '';
+  overlay.innerHTML = `<div class="box modal">
+    <h2>📋 Resumo da Batalha PVP</h2>
+    <p>🏆 <b>Vencedor:</b> ${info.winnerName}, com ${info.winMonName} (+${info.xp - (info.othersXP.reduce((s,o)=>s+o.xp,0))} XP${info.othersXP.length>0?' — 60%':''})</p>
+    ${othersLine}
+    <p>Pokémon desmaiados — ${info.aName}: ${info.aFainted}/${info.aTotal} · ${info.bName}: ${info.bFainted}/${info.bTotal}</p>
+    <p>Duração: ${info.rounds} rodada(s) de combate</p>
+    <p>${info.loserName} perdeu 💰${info.goldLost} de gold e renasceu com o time curado pela metade.</p>
+    <button class="gold" onclick="document.getElementById('battleSummaryModal').remove()">1) OK</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+/* =========================================================
+   TURNOS / RODADAS / EVENTOS
+   ========================================================= */
+function buildTurnSummary(p, entries){
+  const captured = entries.filter(e=>e.msg.includes('capturou')).length;
+  const evolved = entries.filter(e=>e.msg.includes('evoluiu para')).length;
+  const wonBattle = entries.some(e=>e.msg.includes('venceu a batalha'));
+  const lostBattle = entries.some(e=>e.msg.includes('renasceu na zona'));
+  const bought = entries.filter(e=>e.msg.includes('comprou')).length;
+  const missionDone = entries.filter(e=>e.msg.includes('completou a missão')).length;
+  const healed = entries.some(e=>e.msg.includes('Centro Pokémon') && e.msg.includes('curou'));
+  const challenged = entries.some(e=>e.msg.includes('desafiou'));
+  const parts = [`${p.name} terminou o turno na zona ${p.zone}`];
+  if(captured>0) parts.push(`capturou ${captured} pokémon(s)`);
+  if(evolved>0) parts.push(`evoluiu ${evolved} pokémon(s)`);
+  if(wonBattle) parts.push(`venceu uma batalha`);
+  if(lostBattle) parts.push(`foi derrotado`);
+  if(challenged && !wonBattle && !lostBattle) parts.push(`lançou um desafio PVP`);
+  if(bought>0) parts.push(`comprou ${bought} item(ns)`);
+  if(missionDone>0) parts.push(`completou ${missionDone} missão(ões)`);
+  if(healed) parts.push(`curou o time no Centro Pokémon`);
+  parts.push(`💰${p.gold}`);
+  return parts.join(' · ');
+}
+function endTurn(){
+  const endingPlayer = state.players[state.currentPlayerIdx];
+  const turnEntries = state.history.filter(h=>h.turn===state.turnCount && h.type!=='summary');
+  logEvent(buildTurnSummary(endingPlayer, turnEntries), 'summary');
+  if(state.shopUsedThisTurn){
+    const oldShop = SHOP_ZONE;
+    SHOP_ZONE = relocateSpecialZone(oldShop, CENTER_ZONE);
+    logEvent(`A Loja foi usada neste turno e mudou de lugar! Agora fica na zona ${SHOP_ZONE}.`);
+    showBigMessage(`🏪 A Loja mudou de lugar!`, 'good');
+    state.shopUsedThisTurn = false;
+  }
+  let idx = state.currentPlayerIdx;
+  do{ idx = (idx+1) % state.players.length; } while(state.players[idx].eliminated);
+  if(idx <= state.currentPlayerIdx){
+    state.round++;
+    if(state.eventActive){
+      state.eventRoundsLeft--;
+      if(state.eventRoundsLeft<=0){
+        logEvent(`O evento de tipo ${state.eventActive} terminou.`);
+        state.eventActive=null;
+        state.eventCountdown = EVENT_INTERVAL - EVENT_DURATION;
+      }
+    } else {
+      state.eventCountdown--;
+      if(state.eventCountdown<=0){
+        state.eventActive = pick(EVENT_CATEGORIES);
+        state.eventRoundsLeft = EVENT_DURATION;
+        logEvent(`🌟 Novo evento: pokémons do tipo ${state.eventActive} estão em alta em suas regiões!`);
+        showBigMessage(`🌟 O evento de ${state.eventActive} começou!`, 'good');
+        state.players.forEach(p=>processMissionEvent(p, 'event_participate'));
+      }
+    }
+  }
+  state.currentPlayerIdx = idx;
+  state.turnCount++;
+  state.phase='movement';
+  const nextPlayer = state.players[idx];
+  nextPlayer.turnsTaken = (nextPlayer.turnsTaken||0)+1;
+  nextPlayer.itemUsedThisTurn = false;
+  if(onlineMode){
+    netSend({type:'state', payload: serializeState()}); // transmite mesmo já não estando mais no controle
+    lastSeenTurnOwner = nextPlayer.id;
+    myTurnStarted = false;
+    renderGame();
+  } else {
+    showPassScreen();
+  }
+}
+function showPassScreen(){
+  const p = state.players[state.currentPlayerIdx];
+  if(p.isBot){
+    renderBotTurnScreen(p);
+    setTimeout(()=>runBotTurn(p), 900);
+    return;
+  }
+  state.awaitingStart = true;
+  numericShortcuts = {};
+  const el = document.getElementById('screen-game');
+  document.getElementById('floatingPanel')?.remove();
+  el.innerHTML = `
+    <div class="box center" style="flex-direction:column; gap:14px; padding:40px 20px;">
+      <div>${trainerSpriteSVG(p.color, 64, p.gender)}</div>
+      <h2 style="font-size:20px;">Passe o dispositivo para</h2>
+      <h1 style="font-size:22px;">${p.name}</h1>
+      <button class="gold" style="font-size:22px; padding:14px 28px;" onclick="proceedTurn()">▶️ INICIAR (ou espaço)</button>
+    </div>`;
+}
+function proceedTurn(){
+  state.awaitingStart = false;
+  renderGame();
+}
+function renderOnlinePassScreen(){
+  const p = state.players[state.currentPlayerIdx];
+  const el = document.getElementById('screen-game');
+  document.getElementById('floatingPanel')?.remove();
+  el.innerHTML = `
+    <div class="box center" style="flex-direction:column; gap:14px; padding:40px 20px;">
+      <div>${trainerSpriteSVG(p.color, 64, p.gender)}</div>
+      <h2 style="font-size:20px;">Sua vez!</h2>
+      <h1 style="font-size:22px;">${p.name}</h1>
+      <button class="gold" style="font-size:22px; padding:14px 28px;" onclick="confirmMyTurnStart()">▶️ INICIAR (ou espaço)</button>
+    </div>`;
+}
+function confirmMyTurnStart(){
+  myTurnStarted = true;
+  renderGame();
+}
+
+/* =========================================================
+   MULTIPLAYER ONLINE (PeerJS) — sala com código, até 8 jogadores,
+   conexão direta entre navegadores (sem servidor próprio).
+   ========================================================= */
+let onlineMode = false;
+let myPlayerId = null;   // 0 = quem criou a sala, 1..7 = quem entrou, na ordem
+let netPeer = null;
+let netConn = null;      // usado por quem ENTRA na sala (conexão única com o anfitrião)
+let netConns = [];       // usado pelo ANFITRIÃO (uma conexão por jogador que entrou)
+let challengeTimer = null;
+let isHostFlag = false;
+let lobbyPlayers = [];   // [{id, name, gender, color}] — usado só durante o lobby
+let lobbyMapSize = 'medio';
+
+function genRoomCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+function amIInControl(){
+  if(!onlineMode) return true;
+  if(!state || !state.players || state.players.length===0) return true;
+  return state.players[state.currentPlayerIdx].id === myPlayerId;
+}
+function netSend(msg){
+  if(isHostFlag){ netConns.forEach(c=>{ if(c && c.open) c.send(msg); }); }
+  else if(netConn && netConn.open) netConn.send(msg);
+}
+function broadcastStateIfNeeded(){
+  if(!onlineMode) return;
+  if(!amIInControl()) return; // só quem está no turno manda o estado durante o jogo normal
+  netSend({type:'state', payload: serializeState()});
+}
+function applyRemoteState(payload){
+  const obj = JSON.parse(decodeURIComponent(escape(atob(payload))));
+  restoreMapMeta(obj);
+  obj.players.forEach(p=>{ p.zonesVisited = new Set(p.zonesVisited); });
+  state = obj;
+  document.getElementById('screen-setup').classList.add('hidden');
+  document.getElementById('screen-game').classList.remove('hidden');
+  if(state.gameOver) renderEndgame(); else renderGame();
+}
+function fileProtocolWarning(){
+  if(location.protocol==='file:'){
+    return `<p class="small" style="color:#c0392b; border:2px solid #c0392b; padding:6px; border-radius:3px;">⚠️ Este arquivo está aberto direto do disco (file://). O modo online usa conexão em tempo real e a maioria dos navegadores bloqueia isso quando o arquivo não vem de um servidor. Sirva o arquivo por HTTP antes de usar o online — ex: <code>npx serve</code> ou <code>python -m http.server</code> na pasta do arquivo, depois abra o endereço http://localhost que aparecer.</p>`;
+  }
+  return '';
+}
+
+/* ---------- ANFITRIÃO: cria a sala e comanda o lobby ---------- */
+function createOnlineRoom(){
+  const statusEl0 = document.getElementById('onlineStatus');
+  if(typeof Peer==='undefined'){
+    statusEl0.innerHTML = fileProtocolWarning() + `❌ A biblioteca de conexão não carregou. Verifique sua internet e recarregue a página (F5).`;
+    return;
+  }
+  const name = document.getElementById('onlineMyName').value || 'Jogador 1';
+  const gender = document.getElementById('onlineMyGender').value;
+  const color = document.getElementById('onlineMyColor').value;
+  const starter = document.getElementById('onlineMyStarter').value;
+  lobbyMapSize = document.querySelector('input[name="onlineMapSize"]:checked').value;
+  const code = genRoomCode();
+  onlineMode = true; myPlayerId = 0; isHostFlag = true;
+  lobbyPlayers = [{id:0, name, gender, color, starter}];
+  netPeer = new Peer('pokegame-'+code);
+  netPeer.on('open', ()=>{ renderHostLobby(code, `Sala criada! Aguardando jogadores entrarem...`); });
+  netPeer.on('error', (err)=>{ document.getElementById('onlineStatus').innerHTML = `❌ Erro ao criar sala: ${err.type||err.message}. Recarregue e tente de novo.`; });
+  netPeer.on('connection', (conn)=>{
+    if(lobbyPlayers.length>=8){ conn.on('open',()=>conn.send({type:'roomFull'})); return; }
+    conn.on('open', ()=>{});
+    conn.on('error', ()=>{});
+    conn.on('close', ()=>{
+      netConns = netConns.filter(c=>c!==conn);
+      lobbyPlayers = lobbyPlayers.filter(lp=>lp._conn!==conn);
+      netSend({type:'lobby', players: lobbyPlayers.map(({_conn,...rest})=>rest)});
+      renderHostLobby(code);
+    });
+    conn.on('data', (msg)=>{
+      try{
+        if(msg.type==='join'){
+          if(lobbyPlayers.length>=8){ conn.send({type:'roomFull'}); return; }
+          netConns.push(conn);
+          const newId = lobbyPlayers.length;
+          lobbyPlayers.push({id:newId, name:(msg.name||'Jogador '+(newId+1)), gender:(msg.gender||'menino'), color:(msg.color||PLAYER_COLORS[newId%8]), starter:(msg.starter||'Pikachu'), _conn:conn});
+          conn.send({type:'assignedId', id:newId});
+          netSend({type:'lobby', players: lobbyPlayers.map(({_conn,...rest})=>rest)});
+          renderHostLobby(code);
+        } else {
+          handleNetworkMessage(msg);
+        }
+      } catch(err){
+        console.error('Erro ao processar mensagem:', err);
+      }
+    });
+  });
+  renderHostLobby(code, `Criando sala...`);
+}
+function renderHostLobby(code, extraMsg){
+  const statusEl = document.getElementById('onlineStatus');
+  if(!statusEl) return;
+  statusEl.innerHTML = `
+    ${fileProtocolWarning()}
+    <div class="box" style="margin-top:8px;">
+      <h3>🌐 Lobby da sala</h3>
+      <p><b>Código da sala: <span style="font-size:26px; letter-spacing:2px;">${code}</span></b></p>
+      <p class="small">Passe esse código pros outros jogadores. Você (anfitrião) decide quando começar — pode iniciar com 2 até 8 jogadores.</p>
+      ${extraMsg?`<p class="small">${extraMsg}</p>`:''}
+      <div id="lobbyPlayerList">${lobbyPlayers.map(p=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.id===0?' (você, anfitrião)':''}</div>`).join('')}</div>
+      <button class="green" style="margin-top:10px;" onclick="startOnlineGameAsHost()" ${lobbyPlayers.length<2?'disabled title="Espere pelo menos mais 1 jogador entrar"':''}>▶️ Iniciar Partida (${lobbyPlayers.length}/8)</button>
+    </div>
+  `;
+}
+function startOnlineGameAsHost(){
+  if(lobbyPlayers.length<2) return;
+  setupMap(lobbyMapSize);
+  const starts = computeStartZones(lobbyPlayers.length);
+  const players = lobbyPlayers.map((lp,i)=>{
+    const p = { id:lp.id, name:lp.name, gender:lp.gender, color:lp.color, zone:starts[i], gold:50, items:{"Poção":2,"Pokébola":5},
+      team:[], zonesVisited:new Set([starts[i]]), pvpWins:0, isBot:false,
+      eliminated:false, itemUsedThisTurn:false, turnsTaken:1, masterBallLastUsedTurn:null, challengeImmuneUntilTurn:0 };
+    giveStarterPokemon(p, lp.starter || 'Pikachu');
+    return p;
+  });
+  players.forEach(p=>{ p.missions=[generateMission('facil',p), generateMission('media',p), generateMission('dificil',p)]; });
+  state = {
+    turnCount:1, currentPlayerIdx:0, round:1, eventActive:null, eventRoundsLeft:0, eventCountdown:EVENT_INTERVAL,
+    history:[], diceLog:[], gameOver:false, shopUsedThisTurn:false,
+    players, phase:'movement', stepsRemaining:0, running:false
+  };
+  logEvent(`Partida online iniciada com ${players.length} jogador(es) em um mapa ${lobbyMapSize} (${GRID_SIZE}x${GRID_SIZE}).`);
+  document.getElementById('screen-setup').classList.add('hidden');
+  document.getElementById('screen-game').classList.remove('hidden');
+  lastSeenTurnOwner = players[0].id;
+  myTurnStarted = false;
+  renderGame();
+  netSend({type:'state', payload: serializeState()});
+}
+
+/* ---------- QUEM ENTRA: conecta e aguarda no lobby ---------- */
+function joinOnlineRoom(){
+  if(typeof Peer==='undefined'){
+    document.getElementById('onlineStatus').innerHTML = fileProtocolWarning() + `❌ A biblioteca de conexão não carregou. Verifique sua internet e recarregue a página (F5).`;
+    return;
+  }
+  const name = document.getElementById('onlineMyName').value || 'Jogador';
+  const gender = document.getElementById('onlineMyGender').value;
+  const color = document.getElementById('onlineMyColor').value;
+  const starter = document.getElementById('onlineMyStarter').value;
+  const code = (document.getElementById('joinRoomCode').value||'').trim().toUpperCase();
+  if(!code){ alert('Digite o código da sala.'); return; }
+  const statusEl = document.getElementById('onlineStatus');
+  statusEl.innerHTML = fileProtocolWarning() + `Conectando ao servidor de sinalização...`;
+  onlineMode = true; isHostFlag = false;
+  netPeer = new Peer();
+  let gotState = false;
+  netPeer.on('open', ()=>{
+    statusEl.innerHTML = fileProtocolWarning() + `Procurando a sala ${code}...`;
+    netConn = netPeer.connect('pokegame-'+code, {reliable:true});
+    netConn.on('open', ()=>{
+      statusEl.innerHTML = fileProtocolWarning() + `✅ Conectado! Enviando seus dados...`;
+      netConn.send({type:'join', name, gender, color, starter});
+      setTimeout(()=>{
+        if(!gotState) statusEl.innerHTML += `<br><span style="color:#c0392b;">⚠️ Demorando mais que o esperado. Confira se o anfitrião ainda está na sala.</span>`;
+      }, 8000);
+    });
+    netConn.on('data', (msg)=>{
+      if(msg.type==='state') gotState = true;
+      try{ handleNetworkMessage(msg); }
+      catch(err){ statusEl.innerHTML = `❌ Erro ao processar dados da partida: ${err.message}.`; console.error(err); }
+    });
+    netConn.on('error', (err)=>{ statusEl.innerHTML = `❌ Erro na conexão: ${err.type||err.message||err}. Confira o código e tente de novo.`; });
+    netConn.on('close', ()=>{ if(!gotState) statusEl.innerHTML = `⚠️ A conexão caiu antes da partida começar. Tente de novo.`; });
+  });
+  netPeer.on('error', (err)=>{ statusEl.innerHTML = `❌ Erro: ${err.type||err.message}. Confira o código (sala pode não existir ainda) e tente de novo.`; });
+}
+function renderJoinerLobby(players){
+  const statusEl = document.getElementById('onlineStatus');
+  if(!statusEl) return;
+  statusEl.innerHTML = `
+    <div class="box" style="margin-top:8px;">
+      <h3>🌐 Aguardando o anfitrião iniciar...</h3>
+      <p class="small">Jogadores na sala (${players.length}/8):</p>
+      ${players.map(p=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.id===myPlayerId?' (você)':''}</div>`).join('')}
+    </div>
+  `;
+}
+function handleNetworkMessage(msg){
+  if(msg.type==='state'){
+    applyRemoteState(msg.payload);
+  } else if(msg.type==='challengeResponse'){
+    if(pendingChallenge) respondChallenge(msg.accepted);
+  } else if(msg.type==='lobby'){
+    renderJoinerLobby(msg.players);
+  } else if(msg.type==='assignedId'){
+    myPlayerId = msg.id;
+  } else if(msg.type==='roomFull'){
+    document.getElementById('onlineStatus').innerHTML = `❌ Essa sala já está cheia (8/8 jogadores).`;
+  }
+}
+
+/* =========================================================
+   BOTS DE IA
+   ========================================================= */
+function renderBotTurnScreen(p){
+  const el = document.getElementById('screen-game');
+  document.getElementById('floatingPanel')?.remove();
+  el.innerHTML = `
+    <div class="box center" style="flex-direction:column; gap:14px; padding:40px 20px;">
+      <div>${trainerSpriteSVG(p.color, 64, p.gender)}</div>
+      <h2 style="font-size:20px;">🤖 ${p.name} está jogando...</h2>
+    </div>`;
+}
+function runBotTurn(p){
+  if(state.players[state.currentPlayerIdx]!==p || state.gameOver) return;
+  state.awaitingStart = false;
+  state.phase = 'movement';
+  botDecideMovement(p);
+}
+function botDecideMovement(p){
+  const steps = rollDiceShow(6,1,`${p.name} (bot) — Mover`);
+  state.stepsRemaining = steps;
+  state.running = false;
+  state.moveHistory = [];
+  state.phase = 'moving';
+  renderGame();
+  setTimeout(()=>botStepLoop(p), 350);
+}
+function botStepLoop(p, iterations){
+  iterations = iterations || 0;
+  if(state.players[state.currentPlayerIdx]!==p || state.gameOver) return;
+  if(state.stepsRemaining<=0){
+    state.phase='action';
+    renderGame();
+    setTimeout(()=>botDecideAction(p), 500);
+    return;
+  }
+  if(iterations>60){
+    // trava de segurança: nunca deixa o bot ficar preso andando pra sempre
+    logEvent(`${p.name} parou de andar (limite de segurança).`);
+    state.stepsRemaining = 0;
+    state.moveHistory = [];
+    state.phase='action';
+    renderGame();
+    setTimeout(()=>botDecideAction(p), 500);
+    return;
+  }
+  const lastDir = state.moveHistory[state.moveHistory.length-1];
+  const undoDir = lastDir ? OPPOSITE_DIR[lastDir] : null;
+  let validDirs = ['up','down','left','right'].filter(d=> d!==undoDir && neighborZone(p.zone,d)!==null);
+  if(validDirs.length===0) validDirs = ['up','down','left','right'].filter(d=>neighborZone(p.zone,d)!==null);
+  const dir = validDirs.length>0 ? pick(validDirs) : pick(['up','down','left','right']);
+  stepMove(dir);
+  setTimeout(()=>botStepLoop(p, iterations+1), 300);
+}
+function botDecideAction(p){
+  if(state.players[state.currentPlayerIdx]!==p || state.gameOver) return;
+  if(p.zone===CENTER_ZONE){
+    healAtCenter();
+  } else if(p.zone===SHOP_ZONE){
+    state.phase='end';
+    renderGame();
+  } else {
+    const others = state.players.filter(o=>o.id!==p.id && !o.eliminated && o.zone===p.zone);
+    const canFight = p.team.slice(0,MAX_ACTIVE).some(m=>m.pv>0);
+    if(others.length>0 && canFight && Math.random()<0.4){
+      tryChallenge();
+    } else {
+      doSearch();
+    }
+  }
+  pollBotTurnEnd(p);
+}
+/** Fica de olho até o turno do bot realmente terminar (sem batalha/modal pendente) e então encerra. */
+function pollBotTurnEnd(p, attempts){
+  attempts = attempts||0;
+  if(state.gameOver || attempts>60) return;
+  if(state.players[state.currentPlayerIdx]!==p) return;
+  const modalIds = ['encounterModal','challengeModal','battleModal','battleItemPicker','switchPickerModal','useItemModal','runConfirmModal','endTurnConfirmModal'];
+  const anyModal = modalIds.some(id=>document.getElementById(id));
+  if(!anyModal && !state.activeBattle && state.phase==='end'){
+    endTurn();
+    return;
+  }
+  setTimeout(()=>pollBotTurnEnd(p, attempts+1), 400);
+}
+/** Escolhe a melhor bola disponível e decide capturar (ou batalhar se não tiver nenhuma). */
+function botHandleEncounter(p){
+  const priority = ['Master Ball','Ultra Ball','Great Ball','Pokébola'];
+  let chosen = null;
+  for(const ball of priority){
+    if(p.items[ball]>0){
+      if(ball==='Master Ball' && !masterBallAvailable(p)) continue;
+      chosen = ball; break;
+    }
+  }
+  setTimeout(()=>{
+    if(chosen) attemptCapture(chosen);
+    else startPVE();
+  }, 500);
+}
+/** Decisão automática de ação em batalha, chamada quando o lado que age é controlado por bot. */
+function autoBattleTurn(){
+  const b = state.activeBattle;
+  if(!b) return;
+  const humanSide = getHumanSide(b);
+  if(!humanSide.player || !humanSide.player.isBot) return;
+  const mon = activeOf(humanSide);
+  if(!mon) return;
+  const p = humanSide.player;
+  const hpPct = mon.pv/mon.pvMax;
+  const betterAlly = humanSide.team.findIndex((m,i)=> i!==humanSide.currentIndex && m.pv > mon.pv*1.3);
+  if(hpPct<=0.3 && !p.itemUsedThisTurn){
+    const cura = Object.entries(ITEMS).find(([k,v])=>v.type==='cura' && p.items[k]>0);
+    if(cura){ battleAction('item', cura[0]); return; }
+  }
+  if(hpPct<=0.35 && betterAlly>=0){
+    performSwitch(betterAlly);
+    return;
+  }
+  battleAction('attack');
+}
+
+/* =========================================================
+   BATALHA FINAL (bracket eliminatório)
+   ========================================================= */
+function startFinalBracket(){
+  const contenders = state.players.filter(p=>p.team.length>0 && !p.eliminated);
+  state.bracket = {round:1, contenders: contenders.map(p=>p), champion:null};
+  renderBracketModal();
+}
+function renderBracketModal(){
+  const br = state.bracket;
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay'; overlay.id='bracketModal';
+  if(br.contenders.length===1){
+    br.champion = br.contenders[0];
+    overlay.innerHTML = `<div class="box modal"><h2>🏆 CAMPEÃO 🏆</h2><p style="font-size:24px;text-align:center;">${br.champion.name}</p>
+      <button class="gold" onclick="document.getElementById('bracketModal').remove(); endGame();">Finalizar</button></div>`;
+    document.body.appendChild(overlay);
+    return;
+  }
+  overlay.innerHTML = `<div class="box modal"><h2>Batalha final — Rodada do bracket</h2>
+    <p class="small">Confrontos desta rodada (3 vs 3):</p>
+    <div id="bracketMatches">${br.contenders.map((p,i)=> i%2===0 && br.contenders[i+1] ? `<div class="row"><b>${p.name}</b> vs <b>${br.contenders[i+1].name}</b> <button onclick="resolveBracketMatch(${i})">Batalhar</button></div>` : (i%2===0 ? `<div class="row"><b>${p.name}</b> avança automaticamente (sem par)</div>` : '')).join('')}</div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function resolveBracketMatch(i){
+  const br = state.bracket;
+  const pA = br.contenders[i], pB = br.contenders[i+1];
+  document.getElementById('bracketModal').remove();
+  const sideA = {player:pA, team: pA.team.slice(0,MAX_ACTIVE), currentIndex:0};
+  const sideB = {player:pB, team: pB.team.slice(0,MAX_ACTIVE), currentIndex:0};
+  tryAdvance(sideA); tryAdvance(sideB);
+  const battle = {type:'PVP-FINAL', a:sideA, b:sideB};
+  state.activeBattle = battle;
+  state._bracketCallback = (winnerSide)=>{
+    br.contenders = br.contenders.filter(p=>p!==pA && p!==pB);
+    br.contenders.push(winnerSide.player);
+    renderBracketModal();
+  };
+  runBattle(battle);
+}
+const _originalFinishBattle = finishBattle;
+finishBattle = function(winnerSide){
+  const b = state.activeBattle;
+  if(b && b.type==='PVP-FINAL'){
+    document.getElementById('battleModal')?.remove();
+    const winner = winnerSide || b.a;
+    logEvent(`${winner.player.name} venceu o confronto do bracket!`);
+    showBigMessage(`🏆 ${winner.player.name} avança no bracket!`, 'good');
+    state.activeBattle=null;
+    if(state._bracketCallback) state._bracketCallback(winner);
+    return;
+  }
+  _originalFinishBattle(winnerSide);
+};
+
+function endGame(){ state.gameOver = true; renderGame(); }
+function renderEndgame(){
+  const el = document.getElementById('screen-game');
+  document.getElementById('floatingPanel')?.remove();
+  el.innerHTML = `<div class="box"><h2>Fim de jogo!</h2>
+    <p>🏆 Campeão: <b>${state.bracket && state.bracket.champion ? state.bracket.champion.name : '—'}</b></p>
+    <button onclick="location.reload()">Nova partida</button>
+  </div>`;
+}
+
+/* init */
+renderSetup();
+</script>
+</body>
+</html>

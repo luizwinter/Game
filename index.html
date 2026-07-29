@@ -58,6 +58,15 @@
   }
   button:hover{filter:brightness(1.15);}
   button:active{transform:translate(2px,2px); box-shadow:1px 1px 0 rgba(0,0,0,.4);}
+  @media (max-width:600px), (pointer:coarse){
+    button{ font-size:20px; padding:12px 16px; min-height:44px; }
+    .float-buttons{ gap:10px; padding:12px; }
+    .float-buttons button{ font-size:18px; padding:14px 16px; }
+    .dpad{ grid-template-columns:repeat(3,58px); grid-template-rows:repeat(3,58px); gap:6px; }
+    button.dir{ font-size:26px; }
+    .tabs button{ font-size:16px; padding:10px 14px; }
+    input, select{ font-size:18px; padding:10px; min-height:40px; }
+  }
   button.gold{background:var(--accent-gold); color:#1c1408;}
   button.green{background:var(--accent-green);}
   button.red{background:var(--accent-red);}
@@ -162,7 +171,8 @@
   @keyframes spinIcon{from{transform:rotate(0);}to{transform:rotate(360deg);}}
   .anim-spin{display:inline-block; animation:spinIcon .5s linear;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 </head>
 <body>
 <div id="toastLayer"></div>
@@ -906,7 +916,7 @@ function renderSetup(){
     </div>
 
     <div id="onlineSetupBox" class="hidden">
-      <p class="small" style="margin-top:8px;">Modo online: 2 jogadores, cada um no seu dispositivo. Um cria a sala, o outro entra com o código.</p>
+      <p class="small" style="margin-top:8px;">Modo online: até 8 jogadores, cada um no seu dispositivo. Um cria a sala, os outros entram com o código, e o anfitrião decide quando começar.</p>
       <div class="row" style="border:2px solid var(--border); border-radius:3px; padding:6px; margin-bottom:6px; background:#fffdf3;">
         <input id="onlineMyName" class="pname" placeholder="Seu nome" value="Jogador">
         <select id="onlineMyGender"><option value="menino">Menino</option><option value="menina">Menina</option></select>
@@ -1115,7 +1125,7 @@ function renderGame(){
       <div class="col-center">
         <div class="box">
           <div class="row" style="justify-content:space-between;">
-            <h2>Rodada ${state.round} — Turno de ${p.name} ${state.eventActive? '🌟' : ''}</h2>
+            <h2>Rodada ${state.round} — Turno de ${p.name} ${p.disconnected?'🔌':''} ${state.eventActive? '🌟' : ''}</h2>
             <button class="gold" onclick="renderTutorialModal()">❓ Tutorial</button>
           </div>
           ${state.eventActive ? `<p class="small">🌟 Evento ativo: pokémons do tipo <b>${state.eventActive}</b> aparecem com chance de RARO/LENDÁRIO (${state.eventRoundsLeft} rodada(s) restante(s))</p>` : `<p class="small">⏳ Faltam ${state.eventCountdown} rodada(s) para o próximo evento.</p>`}
@@ -1157,6 +1167,7 @@ function renderGame(){
   if(state.activeBattle) renderBattleModal();
   else document.getElementById('battleModal')?.remove();
   broadcastStateIfNeeded();
+  updateConnectionBadge();
 }
 function renderQuickTeamPanel(){
   const p = state.players[state.currentPlayerIdx];
@@ -1372,6 +1383,13 @@ function renderSaveTab(){
    PAINEL FLUTUANTE ARRASTÁVEL (com atalhos numéricos)
    ========================================================= */
 let panelPos = null;
+function hostSkipDisconnectedTurn(){
+  if(!isHostFlag) return;
+  const p = state.players[state.currentPlayerIdx];
+  if(!p.disconnected) return;
+  logEvent(`${p.name} estava desconectado — o anfitrião pulou o turno dele.`, 'summary');
+  endTurn();
+}
 function ensureFloatingPanel(){
   let panel = document.getElementById('floatingPanel');
   if(!panel){
@@ -1420,8 +1438,13 @@ function updateFloatingPanel(){
     return;
   }
   if(!amIInControl()){
+    if(isHostFlag && p.disconnected){
+      numericShortcuts = {'1': ()=>hostSkipDisconnectedTurn()};
+      wrap.innerHTML = `<p class="small center">🔌 ${p.name} está desconectado.</p><button class="red" onclick="hostSkipDisconnectedTurn()">1) Pular turno dele</button>`;
+      return;
+    }
     numericShortcuts = {};
-    wrap.innerHTML = `<p class="small center">⏳ Vez de ${p.name}. Aguarde...</p>`;
+    wrap.innerHTML = `<p class="small center">⏳ Vez de ${p.name}${p.disconnected?' 🔌 (desconectado)':''}. Aguarde...</p>`;
     return;
   }
   let html = '';
@@ -2325,6 +2348,7 @@ function renderOnlinePassScreen(){
       <h1 style="font-size:22px;">${p.name}</h1>
       <button class="gold" style="font-size:22px; padding:14px 28px;" onclick="confirmMyTurnStart()">▶️ INICIAR (ou espaço)</button>
     </div>`;
+  updateConnectionBadge();
 }
 function confirmMyTurnStart(){
   myTurnStarted = true;
@@ -2335,15 +2359,71 @@ function confirmMyTurnStart(){
    MULTIPLAYER ONLINE (PeerJS) — sala com código, até 8 jogadores,
    conexão direta entre navegadores (sem servidor próprio).
    ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDfDSAqz7uy4zPmQ7qt_BMN1S-vh8er9_A",
+  authDomain: "pokegame-160d4.firebaseapp.com",
+  databaseURL: "https://pokegame-160d4-default-rtdb.firebaseio.com",
+  projectId: "pokegame-160d4",
+  storageBucket: "pokegame-160d4.firebasestorage.app",
+  messagingSenderId: "189806868838",
+  appId: "1:189806868838:web:31992f9f4bc5d66f0130a7"
+};
 let onlineMode = false;
-let myPlayerId = null;   // 0 = quem criou a sala, 1..7 = quem entrou, na ordem
-let netPeer = null;
-let netConn = null;      // usado por quem ENTRA na sala (conexão única com o anfitrião)
-let netConns = [];       // usado pelo ANFITRIÃO (uma conexão por jogador que entrou)
-let challengeTimer = null;
+let myPlayerId = null;   // definido assim que o próprio jogador é encontrado dentro de state.players
+let myToken = null;      // identidade persistente deste navegador (guardada no localStorage)
 let isHostFlag = false;
-let lobbyPlayers = [];   // [{id, name, gender, color}] — usado só durante o lobby
+let roomCode = null;
+let roomRef = null;      // referência Firebase pra esta sala
+let lobbyPlayers = [];   // [{name, gender, color, starter, token, joinedAt}] — só durante o lobby
 let lobbyMapSize = 'medio';
+let stateListenerAttached = false;
+let fbConnectedFlag = true;
+let fbApp = null, fbDb = null;
+
+function ensureFirebase(){
+  if(typeof firebase==='undefined') return false;
+  if(!fbApp){
+    fbApp = firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.database();
+    fbDb.ref('.info/connected').on('value', snap=>{
+      fbConnectedFlag = snap.val()===true;
+      updateConnectionBadge();
+    });
+  }
+  return true;
+}
+/** Identidade persistente do navegador — permite reconectar na mesma partida depois de fechar a aba. */
+function getMyToken(){
+  try{
+    let t = localStorage.getItem('pokegame_token');
+    if(!t){ t = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('pokegame_token', t); }
+    return t;
+  } catch(e){
+    if(!window.__pokegameFallbackToken) window.__pokegameFallbackToken = Math.random().toString(36).slice(2);
+    return window.__pokegameFallbackToken;
+  }
+}
+function isConnectionHealthy(){ return !onlineMode || fbConnectedFlag; }
+function updateConnectionBadge(){
+  if(!onlineMode){ document.getElementById('connBadge')?.remove(); return; }
+  let badge = document.getElementById('connBadge');
+  if(!badge){
+    badge = document.createElement('div');
+    badge.id = 'connBadge';
+    badge.style.cssText = 'position:fixed; top:8px; left:8px; z-index:90; padding:6px 10px; border-radius:4px; font-family:"VT323",monospace; font-size:15px; border:2px solid #1c1408; box-shadow:2px 2px 0 rgba(0,0,0,.4);';
+    document.body.appendChild(badge);
+  }
+  if(isConnectionHealthy()){
+    badge.style.background = '#3a9d5d'; badge.style.color = '#fff';
+    badge.innerHTML = '🟢 Online';
+  } else {
+    badge.style.background = '#c0392b'; badge.style.color = '#fff';
+    badge.innerHTML = '🔴 Sem conexão — reconectando sozinho...';
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && onlineMode) setTimeout(updateConnectionBadge, 300);
+});
 
 function genRoomCode(){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2356,36 +2436,57 @@ function amIInControl(){
   if(!state || !state.players || state.players.length===0) return true;
   return state.players[state.currentPlayerIdx].id === myPlayerId;
 }
-function netSend(msg){
-  if(isHostFlag){ netConns.forEach(c=>{ if(c && c.open) c.send(msg); }); }
-  else if(netConn && netConn.open) netConn.send(msg);
+/** Marca automaticamente o jogador como desconectado no banco se a conexão cair de qualquer jeito
+    (fechar a aba, perder internet, app matar o processo) — funciona mesmo sem aviso prévio. */
+function setupPresence(playerIndex){
+  if(playerIndex==null || playerIndex<0 || !roomRef) return;
+  roomRef.child(`state/players/${playerIndex}/disconnected`).onDisconnect().set(true);
 }
 function broadcastStateIfNeeded(){
-  if(!onlineMode) return;
+  if(!onlineMode || !roomRef) return;
   if(!amIInControl()) return; // só quem está no turno manda o estado durante o jogo normal
-  netSend({type:'state', payload: serializeState()});
+  const payload = JSON.parse(JSON.stringify(state, (k,v)=> v instanceof Set ? Array.from(v) : v));
+  payload.__mapMeta = { GRID_SIZE, TOTAL_ZONES, CENTER_ZONE, SHOP_ZONE, TUNNEL_ZONES: Array.from(TUNNEL_ZONES) };
+  roomRef.child('state').set(payload);
 }
-function applyRemoteState(payload){
-  const obj = JSON.parse(decodeURIComponent(escape(atob(payload))));
+function applyRemoteState(obj){
   restoreMapMeta(obj);
-  obj.players.forEach(p=>{ p.zonesVisited = new Set(p.zonesVisited); });
+  obj.players.forEach(p=>{ p.zonesVisited = new Set(p.zonesVisited||[]); });
+  const isFirstLoad = (myPlayerId===null);
   state = obj;
+  if(isFirstLoad){
+    const idx = state.players.findIndex(p=>p.token===myToken);
+    if(idx>=0){ myPlayerId = state.players[idx].id; setupPresence(idx); }
+  }
   document.getElementById('screen-setup').classList.add('hidden');
   document.getElementById('screen-game').classList.remove('hidden');
   if(state.gameOver) renderEndgame(); else renderGame();
 }
-function fileProtocolWarning(){
-  if(location.protocol==='file:'){
-    return `<p class="small" style="color:#c0392b; border:2px solid #c0392b; padding:6px; border-radius:3px;">⚠️ Este arquivo está aberto direto do disco (file://). O modo online usa conexão em tempo real e a maioria dos navegadores bloqueia isso quando o arquivo não vem de um servidor. Sirva o arquivo por HTTP antes de usar o online — ex: <code>npx serve</code> ou <code>python -m http.server</code> na pasta do arquivo, depois abra o endereço http://localhost que aparecer.</p>`;
-  }
-  return '';
+function attachStateListener(){
+  if(stateListenerAttached) return;
+  stateListenerAttached = true;
+  roomRef.child('state').on('value', snap=>{
+    const val = snap.val();
+    if(val) applyRemoteState(val);
+  });
+  roomRef.child('challengeResponse').on('value', snap=>{
+    const val = snap.val();
+    if(val && pendingChallenge && amIInControl()){
+      respondChallenge(val.accepted);
+      roomRef.child('challengeResponse').remove();
+    }
+  });
+}
+function respondOnlineChallenge(accepted){
+  document.getElementById('challengeModal')?.remove();
+  roomRef.child('challengeResponse').set({accepted, ts: Date.now()});
 }
 
 /* ---------- ANFITRIÃO: cria a sala e comanda o lobby ---------- */
 function createOnlineRoom(){
   const statusEl0 = document.getElementById('onlineStatus');
-  if(typeof Peer==='undefined'){
-    statusEl0.innerHTML = fileProtocolWarning() + `❌ A biblioteca de conexão não carregou. Verifique sua internet e recarregue a página (F5).`;
+  if(!ensureFirebase()){
+    statusEl0.innerHTML = `❌ A biblioteca de conexão (Firebase) não carregou. Verifique sua internet e recarregue a página (F5).`;
     return;
   }
   const name = document.getElementById('onlineMyName').value || 'Jogador 1';
@@ -2394,52 +2495,35 @@ function createOnlineRoom(){
   const starter = document.getElementById('onlineMyStarter').value;
   lobbyMapSize = document.querySelector('input[name="onlineMapSize"]:checked').value;
   const code = genRoomCode();
-  onlineMode = true; myPlayerId = 0; isHostFlag = true;
-  lobbyPlayers = [{id:0, name, gender, color, starter}];
-  netPeer = new Peer('pokegame-'+code);
-  netPeer.on('open', ()=>{ renderHostLobby(code, `Sala criada! Aguardando jogadores entrarem...`); });
-  netPeer.on('error', (err)=>{ document.getElementById('onlineStatus').innerHTML = `❌ Erro ao criar sala: ${err.type||err.message}. Recarregue e tente de novo.`; });
-  netPeer.on('connection', (conn)=>{
-    if(lobbyPlayers.length>=8){ conn.on('open',()=>conn.send({type:'roomFull'})); return; }
-    conn.on('open', ()=>{});
-    conn.on('error', ()=>{});
-    conn.on('close', ()=>{
-      netConns = netConns.filter(c=>c!==conn);
-      lobbyPlayers = lobbyPlayers.filter(lp=>lp._conn!==conn);
-      netSend({type:'lobby', players: lobbyPlayers.map(({_conn,...rest})=>rest)});
-      renderHostLobby(code);
-    });
-    conn.on('data', (msg)=>{
-      try{
-        if(msg.type==='join'){
-          if(lobbyPlayers.length>=8){ conn.send({type:'roomFull'}); return; }
-          netConns.push(conn);
-          const newId = lobbyPlayers.length;
-          lobbyPlayers.push({id:newId, name:(msg.name||'Jogador '+(newId+1)), gender:(msg.gender||'menino'), color:(msg.color||PLAYER_COLORS[newId%8]), starter:(msg.starter||'Pikachu'), _conn:conn});
-          conn.send({type:'assignedId', id:newId});
-          netSend({type:'lobby', players: lobbyPlayers.map(({_conn,...rest})=>rest)});
-          renderHostLobby(code);
-        } else {
-          handleNetworkMessage(msg);
-        }
-      } catch(err){
-        console.error('Erro ao processar mensagem:', err);
-      }
-    });
+  roomCode = code; onlineMode = true; isHostFlag = true; myToken = getMyToken();
+  roomRef = fbDb.ref('rooms/'+code);
+  roomRef.child('meta').set({mapSize:lobbyMapSize, started:false, createdAt:firebase.database.ServerValue.TIMESTAMP});
+  roomRef.child('lobby').push({name, gender, color, starter, token:myToken, joinedAt:firebase.database.ServerValue.TIMESTAMP});
+  listenToLobby();
+  updateConnectionBadge();
+  renderHostLobby(code, `Sala criada! Aguardando jogadores entrarem...`);
+}
+function listenToLobby(){
+  roomRef.child('lobby').on('value', snap=>{
+    const val = snap.val() || {};
+    lobbyPlayers = Object.values(val).sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0));
+    if(isHostFlag) renderHostLobby(roomCode);
+    else renderJoinerLobby(lobbyPlayers);
   });
-  renderHostLobby(code, `Criando sala...`);
+  roomRef.child('meta/started').on('value', snap=>{
+    if(snap.val()===true) attachStateListener();
+  });
 }
 function renderHostLobby(code, extraMsg){
   const statusEl = document.getElementById('onlineStatus');
   if(!statusEl) return;
   statusEl.innerHTML = `
-    ${fileProtocolWarning()}
     <div class="box" style="margin-top:8px;">
       <h3>🌐 Lobby da sala</h3>
       <p><b>Código da sala: <span style="font-size:26px; letter-spacing:2px;">${code}</span></b></p>
       <p class="small">Passe esse código pros outros jogadores. Você (anfitrião) decide quando começar — pode iniciar com 2 até 8 jogadores.</p>
       ${extraMsg?`<p class="small">${extraMsg}</p>`:''}
-      <div id="lobbyPlayerList">${lobbyPlayers.map(p=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.id===0?' (você, anfitrião)':''}</div>`).join('')}</div>
+      <div id="lobbyPlayerList">${lobbyPlayers.map((p,i)=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.token===myToken?' (você, anfitrião)':''}</div>`).join('')}</div>
       <button class="green" style="margin-top:10px;" onclick="startOnlineGameAsHost()" ${lobbyPlayers.length<2?'disabled title="Espere pelo menos mais 1 jogador entrar"':''}>▶️ Iniciar Partida (${lobbyPlayers.length}/8)</button>
     </div>
   `;
@@ -2449,8 +2533,8 @@ function startOnlineGameAsHost(){
   setupMap(lobbyMapSize);
   const starts = computeStartZones(lobbyPlayers.length);
   const players = lobbyPlayers.map((lp,i)=>{
-    const p = { id:lp.id, name:lp.name, gender:lp.gender, color:lp.color, zone:starts[i], gold:50, items:{"Poção":2,"Pokébola":5},
-      team:[], zonesVisited:new Set([starts[i]]), pvpWins:0, isBot:false,
+    const p = { id:i, name:lp.name, gender:lp.gender, color:lp.color, zone:starts[i], gold:50, items:{"Poção":2,"Pokébola":5},
+      team:[], zonesVisited:new Set([starts[i]]), pvpWins:0, isBot:false, disconnected:false, token:lp.token,
       eliminated:false, itemUsedThisTurn:false, turnsTaken:1, masterBallLastUsedTurn:null, challengeImmuneUntilTurn:0 };
     giveStarterPokemon(p, lp.starter || 'Pikachu');
     return p;
@@ -2462,18 +2546,23 @@ function startOnlineGameAsHost(){
     players, phase:'movement', stepsRemaining:0, running:false
   };
   logEvent(`Partida online iniciada com ${players.length} jogador(es) em um mapa ${lobbyMapSize} (${GRID_SIZE}x${GRID_SIZE}).`);
-  document.getElementById('screen-setup').classList.add('hidden');
-  document.getElementById('screen-game').classList.remove('hidden');
   lastSeenTurnOwner = players[0].id;
   myTurnStarted = false;
-  renderGame();
-  netSend({type:'state', payload: serializeState()});
+  attachStateListener();
+  broadcastStateIfNeededForce();
+  roomRef.child('meta/started').set(true);
+}
+/** Igual broadcastStateIfNeeded, mas sem exigir "estar no controle" — usado só na criação da partida. */
+function broadcastStateIfNeededForce(){
+  const payload = JSON.parse(JSON.stringify(state, (k,v)=> v instanceof Set ? Array.from(v) : v));
+  payload.__mapMeta = { GRID_SIZE, TOTAL_ZONES, CENTER_ZONE, SHOP_ZONE, TUNNEL_ZONES: Array.from(TUNNEL_ZONES) };
+  roomRef.child('state').set(payload);
 }
 
-/* ---------- QUEM ENTRA: conecta e aguarda no lobby ---------- */
+/* ---------- QUEM ENTRA: conecta, entra no lobby ou reconecta numa partida em andamento ---------- */
 function joinOnlineRoom(){
-  if(typeof Peer==='undefined'){
-    document.getElementById('onlineStatus').innerHTML = fileProtocolWarning() + `❌ A biblioteca de conexão não carregou. Verifique sua internet e recarregue a página (F5).`;
+  if(!ensureFirebase()){
+    document.getElementById('onlineStatus').innerHTML = `❌ A biblioteca de conexão (Firebase) não carregou. Verifique sua internet e recarregue a página (F5).`;
     return;
   }
   const name = document.getElementById('onlineMyName').value || 'Jogador';
@@ -2483,29 +2572,33 @@ function joinOnlineRoom(){
   const code = (document.getElementById('joinRoomCode').value||'').trim().toUpperCase();
   if(!code){ alert('Digite o código da sala.'); return; }
   const statusEl = document.getElementById('onlineStatus');
-  statusEl.innerHTML = fileProtocolWarning() + `Conectando ao servidor de sinalização...`;
-  onlineMode = true; isHostFlag = false;
-  netPeer = new Peer();
-  let gotState = false;
-  netPeer.on('open', ()=>{
-    statusEl.innerHTML = fileProtocolWarning() + `Procurando a sala ${code}...`;
-    netConn = netPeer.connect('pokegame-'+code, {reliable:true});
-    netConn.on('open', ()=>{
-      statusEl.innerHTML = fileProtocolWarning() + `✅ Conectado! Enviando seus dados...`;
-      netConn.send({type:'join', name, gender, color, starter});
-      setTimeout(()=>{
-        if(!gotState) statusEl.innerHTML += `<br><span style="color:#c0392b;">⚠️ Demorando mais que o esperado. Confira se o anfitrião ainda está na sala.</span>`;
-      }, 8000);
-    });
-    netConn.on('data', (msg)=>{
-      if(msg.type==='state') gotState = true;
-      try{ handleNetworkMessage(msg); }
-      catch(err){ statusEl.innerHTML = `❌ Erro ao processar dados da partida: ${err.message}.`; console.error(err); }
-    });
-    netConn.on('error', (err)=>{ statusEl.innerHTML = `❌ Erro na conexão: ${err.type||err.message||err}. Confira o código e tente de novo.`; });
-    netConn.on('close', ()=>{ if(!gotState) statusEl.innerHTML = `⚠️ A conexão caiu antes da partida começar. Tente de novo.`; });
-  });
-  netPeer.on('error', (err)=>{ statusEl.innerHTML = `❌ Erro: ${err.type||err.message}. Confira o código (sala pode não existir ainda) e tente de novo.`; });
+  statusEl.innerHTML = `Procurando a sala ${code}...`;
+  roomCode = code; onlineMode = true; isHostFlag = false; myToken = getMyToken();
+  roomRef = fbDb.ref('rooms/'+code);
+  updateConnectionBadge();
+  roomRef.once('value').then(snap=>{
+    if(!snap.exists()){ statusEl.innerHTML = `❌ Essa sala não existe. Confira o código.`; onlineMode=false; return; }
+    const data = snap.val();
+    if(data.meta && data.meta.started){
+      statusEl.innerHTML = `Sala já em andamento — procurando seu lugar nela...`;
+      const players = (data.state && data.state.players) || [];
+      let idx = players.findIndex(pl=>pl && pl.token===myToken);
+      if(idx===-1) idx = players.findIndex(pl=>pl && pl.disconnected && pl.name===name);
+      if(idx===-1){
+        statusEl.innerHTML = `❌ Essa sala já está em andamento e não encontramos seu lugar nela. Se você já jogou aqui antes, use exatamente o mesmo nome.`;
+        onlineMode = false;
+        return;
+      }
+      roomRef.child(`state/players/${idx}/disconnected`).set(false);
+      roomRef.child(`state/players/${idx}/token`).set(myToken);
+      statusEl.innerHTML = `✅ Reconectado à partida!`;
+      attachStateListener();
+    } else {
+      statusEl.innerHTML = `✅ Entrando na sala...`;
+      roomRef.child('lobby').push({name, gender, color, starter, token:myToken, joinedAt:firebase.database.ServerValue.TIMESTAMP});
+      listenToLobby();
+    }
+  }).catch(err=>{ statusEl.innerHTML = `❌ Erro: ${err.message}. Confira sua internet e tente de novo.`; });
 }
 function renderJoinerLobby(players){
   const statusEl = document.getElementById('onlineStatus');
@@ -2514,22 +2607,9 @@ function renderJoinerLobby(players){
     <div class="box" style="margin-top:8px;">
       <h3>🌐 Aguardando o anfitrião iniciar...</h3>
       <p class="small">Jogadores na sala (${players.length}/8):</p>
-      ${players.map(p=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.id===myPlayerId?' (você)':''}</div>`).join('')}
+      ${players.map(p=>`<div class="row"><span>${trainerSpriteSVG(p.color,20,p.gender)}</span><b>${p.name}</b>${p.token===myToken?' (você)':''}</div>`).join('')}
     </div>
   `;
-}
-function handleNetworkMessage(msg){
-  if(msg.type==='state'){
-    applyRemoteState(msg.payload);
-  } else if(msg.type==='challengeResponse'){
-    if(pendingChallenge) respondChallenge(msg.accepted);
-  } else if(msg.type==='lobby'){
-    renderJoinerLobby(msg.players);
-  } else if(msg.type==='assignedId'){
-    myPlayerId = msg.id;
-  } else if(msg.type==='roomFull'){
-    document.getElementById('onlineStatus').innerHTML = `❌ Essa sala já está cheia (8/8 jogadores).`;
-  }
 }
 
 /* =========================================================
